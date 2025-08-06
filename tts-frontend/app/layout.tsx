@@ -1,12 +1,10 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
+import ClientWrapper from './components/ClientWrapper'
 
 export const metadata: Metadata = {
-  title: 'Gemini TTS - AI Voice Generator',
-  description: 'Convert text to natural-sounding speech using Gemini 2.5 Flash Preview TTS with premium AI voices',
+  title: 'AI Text-to-Speech',
+  description: 'Convert text to natural-sounding speech with AI',
 }
 
 export default function RootLayout({
@@ -16,7 +14,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body>
+        <ClientWrapper>
+          {children}
+        </ClientWrapper>
+      </body>
     </html>
   )
 }

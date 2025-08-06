@@ -1,15 +1,19 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
-import { Play, Download, Mic, User, LogIn, Settings, Volume2, Loader2, AlertCircle, CheckCircle, Star, ArrowRight, Zap, Shield, Headphones } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Play, Download, Square, Mic, User, LogOut, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { useAuth } from './contexts/AuthContext'
+import Navigation from './components/Navigation'
+import AuthModal from './components/AuthModal'
 
 interface Language {
   code: string
@@ -26,14 +30,14 @@ interface Voice {
 
 interface UserStatus {
   authenticated: boolean
-  plan?: string
-  planName?: string
-  usage?: {
+  plan: string
+  planName: string
+  usage: {
     monthlyCharacters: number
     monthlyCharactersLimit: number
     charactersRemaining: string | number
   }
-  user?: {
+  user: {
     name: string
     email: string
   }
@@ -41,7 +45,9 @@ interface UserStatus {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
-export default function LandingPage() {
+export default function TTSPage() {
+  const { user, token, isAuthenticated, logout } = useAuth()
+  
   // TTS State
   const [text, setText] = useState('Hello! This is a demonstration of the Gemini 2.5 Flash Preview TTS interface with advanced AI-generated voices including Puck, Charon, Kore, Fenrir, and Aoede.')
   const [languages, setLanguages] = useState<Language[]>([])
@@ -62,13 +68,35 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [userStatus, setUserStatus] = useState<UserStatus>({ authenticated: false })
-  const [showTrySection, setShowTrySection] = useState(false)
+  const [userStatus, setUserStatus] = useState<UserStatus | null>(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   // Initialize app
   useEffect(() => {
     initializeApp()
   }, [])
+
+  // Update user status when auth context changes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setUserStatus({
+        authenticated: true,
+        plan: user.plan,
+        planName: user.plan.charAt(0).toUpperCase() + user.plan.slice(1),
+        usage: {
+          monthlyCharacters: 0,
+          monthlyCharactersLimit: user.plan === 'free' ? 1000 : -1,
+          charactersRemaining: user.plan === 'free' ? 1000 : 'Unlimited'
+        },
+        user: {
+          name: user.name,
+          email: user.email
+        }
+      })
+    } else {
+      setUserStatus(null)
+    }
+  }, [isAuthenticated, user])
 
   // Update audio volume when slider changes
   useEffect(() => {
@@ -79,44 +107,26 @@ export default function LandingPage() {
 
   const initializeApp = async () => {
     try {
-      // Check authentication status (optional)
-      await checkAuthenticationStatus()
+      setLoading(true)
+      setError('')
       
-      // Load languages for demo
+      // Check server health
+      const healthResponse = await fetch(`${API_BASE}/api/health`)
+      const healthData = await healthResponse.json()
+      
+      if (!healthData.success || !healthData.ttsAvailable) {
+        throw new Error('Gemini 2.5 Flash Preview TTS service not available')
+      }
+      
+      // Load languages
       await loadLanguages()
+      setSuccess('Ready to generate speech!')
       
     } catch (error: any) {
       console.error('Initialization error:', error)
-      // Don't show error for guest users, just continue
-    }
-  }
-
-  const checkAuthenticationStatus = async () => {
-    const token = localStorage.getItem('tts_token')
-    if (!token) return
-
-    try {
-      const response = await fetch(`${API_BASE}/api/user/dashboard`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      const data = await response.json()
-      
-      if (data.success) {
-        setUserStatus({
-          authenticated: true,
-          plan: data.dashboard.subscription.plan,
-          planName: data.dashboard.subscription.planName,
-          usage: data.dashboard.usage,
-          user: data.dashboard.user
-        })
-      } else {
-        localStorage.removeItem('tts_token')
-      }
-    } catch (error) {
-      console.error('Authentication check failed:', error)
+      setError(`Initialization failed: ${error.message}`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -125,18 +135,22 @@ export default function LandingPage() {
       const response = await fetch(`${API_BASE}/api/languages`)
       const data = await response.json()
       
-      if (data.success) {
-        setLanguages(data.languages)
-        
-        // Auto-select English if available
-        const englishLang = data.languages.find((lang: Language) => lang.code.startsWith('en-US'))
-        if (englishLang) {
-          setSelectedLanguage(englishLang.code)
-          await loadVoices(englishLang.code)
-        }
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load languages')
       }
+      
+      setLanguages(data.languages)
+      
+      // Auto-select English if available
+      const englishLang = data.languages.find((lang: Language) => lang.code.startsWith('en-US'))
+      if (englishLang) {
+        setSelectedLanguage(englishLang.code)
+        await loadVoices(englishLang.code)
+      }
+      
     } catch (error: any) {
       console.error('Error loading languages:', error)
+      setError(`Failed to load languages: ${error.message}`)
     }
   }
 
@@ -145,16 +159,20 @@ export default function LandingPage() {
       const response = await fetch(`${API_BASE}/api/voices/${languageCode}`)
       const data = await response.json()
       
-      if (data.success) {
-        setVoices(data.voices)
-        
-        // Auto-select first voice (usually Puck for free users)
-        if (data.voices.length > 0) {
-          setSelectedVoice(data.voices[0].id)
-        }
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load voices')
       }
+      
+      setVoices(data.voices)
+      
+      // Auto-select first voice
+      if (data.voices.length > 0) {
+        setSelectedVoice(data.voices[0].id)
+      }
+      
     } catch (error: any) {
       console.error('Error loading voices:', error)
+      setError(`Failed to load voices: ${error.message}`)
     }
   }
 
@@ -189,9 +207,7 @@ export default function LandingPage() {
         'Content-Type': 'application/json'
       }
 
-      // Add auth header if user is logged in
-      const token = localStorage.getItem('tts_token')
-      if (token) {
+      if (isAuthenticated && token) {
         headers['Authorization'] = `Bearer ${token}`
       }
 
@@ -203,7 +219,7 @@ export default function LandingPage() {
           voiceId: selectedVoice,
           languageCode: selectedLanguage,
           speed: speed[0],
-          pitch: pitch[0] - 1.0
+          pitch: pitch[0] - 1.0 // Convert to -1 to +1 range
         })
       })
 
@@ -211,9 +227,12 @@ export default function LandingPage() {
       
       if (!data.success) {
         if (response.status === 429) {
-          setError(`${data.error} Sign up for more usage!`)
+          setError(`${data.error} Please upgrade your plan for more usage.`)
         } else if (response.status === 403) {
-          setError(`${data.error} Sign up to access premium voices!`)
+          setError(`${data.error} Please select an available voice or upgrade your plan.`)
+        } else if (response.status === 401) {
+          setError('Please sign in to use this feature.')
+          setShowAuthModal(true)
         } else {
           throw new Error(data.error || 'Failed to generate speech')
         }
@@ -224,20 +243,15 @@ export default function LandingPage() {
       setAudioUrl(`${API_BASE}${data.url}`)
       
       let successMessage = `Speech generated successfully using ${data.voice}!`
-      if (data.charactersUsed) {
-        if (userStatus.authenticated) {
+      if (data.charactersUsed && data.remainingCharacters !== null) {
+        if (data.remainingCharacters === 'Unlimited') {
           successMessage += ` (${data.charactersUsed} characters used)`
         } else {
-          successMessage += ` Try signing up for more features!`
+          successMessage += ` (${data.charactersUsed} characters used, ${data.remainingCharacters} remaining)`
         }
       }
       
       setSuccess(successMessage)
-      
-      // Refresh user status if authenticated
-      if (userStatus.authenticated) {
-        await checkAuthenticationStatus()
-      }
       
     } catch (error: any) {
       console.error('Speech generation error:', error)
@@ -259,6 +273,14 @@ export default function LandingPage() {
     }
   }
 
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setIsPlaying(false)
+    }
+  }
+
   const downloadAudio = () => {
     if (!audioId) {
       setError('No audio available for download')
@@ -277,121 +299,65 @@ export default function LandingPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('tts_token')
-    setUserStatus({ authenticated: false })
+    logout()
+    setUserStatus(null)
     setSuccess('Logged out successfully')
   }
 
+  const getUsagePercentage = () => {
+    if (!userStatus?.usage) return 0
+    const { monthlyCharacters, monthlyCharactersLimit } = userStatus.usage
+    if (monthlyCharactersLimit === -1) return 0
+    return Math.min(100, (monthlyCharacters / monthlyCharactersLimit) * 100)
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Mic className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-bold text-gray-900">Gemini TTS</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              {userStatus.authenticated ? (
-                <>
-                  <Badge variant="outline">
-                    {userStatus.planName}
-                  </Badge>
-                  <div className="flex items-center space-x-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-700">{userStatus.user?.name}</span>
-                  </div>
-                  <Link href="/tts">
-                    <Button variant="outline" size="sm">
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    Logout
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Link href="/pricing">
-                    <Button variant="outline" size="sm">
-                      <LogIn className="h-4 w-4 mr-2" />
-                      Sign In
-                    </Button>
-                  </Link>
-                  <Link href="/pricing">
-                    <Button size="sm">
-                      Sign Up Free
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="relative">
-                <Mic className="h-16 w-16 text-blue-600" />
-                <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                  NEW
-                </div>
-              </div>
-            </div>
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">
-              Gemini TTS Voice Generator
-            </h1>
-            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-              Convert your text to natural-sounding speech using Gemini 2.5 Flash Preview TTS with advanced AI-generated voices. Try it free - no signup required!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <Button 
-                size="lg" 
-                className="text-lg px-8 py-3"
-                onClick={() => setShowTrySection(true)}
-              >
-                <Play className="mr-2 h-5 w-5" />
-                Try It Free Now
-              </Button>
-              <Link href="/pricing">
-                <Button variant="outline" size="lg" className="text-lg px-8 py-3">
-                  <Star className="mr-2 h-5 w-5" />
-                  View Pricing Plans
-                </Button>
-              </Link>
-            </div>
-            
-            {/* Guest Usage Notice */}
-            {!userStatus.authenticated && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl mx-auto">
-                <p className="text-blue-800 text-sm">
-                  🎯 <strong>Free Trial:</strong> Try basic voices (Puck, Kore) without signing up. 
-                  <Link href="/pricing" className="text-blue-600 font-medium hover:underline ml-1">
-                    Sign up for premium voices and unlimited usage →
-                  </Link>
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Try It Section */}
-      {showTrySection && (
+    <>
+      <Navigation />
+      
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* User Status Widget */}
+          {userStatus?.authenticated && (
+            <Card className="mb-6">
+              <CardContent className="pt-6">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-4">
+                    <div>
+                      <p className="text-sm font-medium">Welcome, {userStatus.user.name}!</p>
+                      <p className="text-xs text-gray-500">Plan: {userStatus.planName}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-gray-600">
+                        {userStatus.usage.monthlyCharacters} / {userStatus.usage.monthlyCharactersLimit === -1 ? '∞' : userStatus.usage.monthlyCharactersLimit} chars
+                      </span>
+                      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-600 transition-all duration-300"
+                          style={{ width: `${getUsagePercentage()}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <Link href="/pricing">
+                    <Button variant="outline" size="sm">
+                      {getUsagePercentage() > 80 ? 'Upgrade Plan' : 'Manage Plan'}
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Main TTS Interface */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <Volume2 className="h-5 w-5 mr-2" />
-                Try Gemini TTS - Free Demo
+                <Mic className="h-5 w-5 mr-2" />
+                Gemini TTS Voice Generator
               </CardTitle>
               <CardDescription>
-                Experience the power of AI voice generation. No signup required for basic features!
+                Convert your text to natural-sounding speech using Gemini 2.5 Flash Preview TTS
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -404,7 +370,7 @@ export default function LandingPage() {
                   placeholder="Enter the text you want to convert to speech..."
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  rows={4}
+                  rows={6}
                   maxLength={5000}
                   className="resize-none"
                 />
@@ -429,9 +395,7 @@ export default function LandingPage() {
                 </div>
                 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Voice {!userStatus.authenticated && <span className="text-xs text-gray-500">(Basic voices only)</span>}
-                  </label>
+                  <label className="text-sm font-medium mb-2 block">Voice</label>
                   <Select value={selectedVoice} onValueChange={setSelectedVoice}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select voice" />
@@ -440,9 +404,6 @@ export default function LandingPage() {
                       {voices.map((voice) => (
                         <SelectItem key={voice.id} value={voice.id}>
                           {voice.displayName}
-                          {!userStatus.authenticated && !['Puck', 'Kore'].some(name => voice.name.includes(name)) && (
-                            <Badge variant="outline" className="ml-2 text-xs">Premium</Badge>
-                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -495,30 +456,38 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Generate Button */}
-              <Button 
-                onClick={generateSpeech} 
-                disabled={loading || !text.trim()}
-                className="w-full"
-                size="lg"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Mic className="mr-2 h-4 w-4" />
-                Generate Speech {!userStatus.authenticated && '(Free)'}
-              </Button>
+              {/* Action Buttons */}
+              <div className="flex gap-4 justify-center">
+                <Button 
+                  onClick={generateSpeech} 
+                  disabled={loading || !text.trim()}
+                  size="lg"
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Mic className="mr-2 h-4 w-4" />
+                  Generate Speech
+                </Button>
+                
+                {audioUrl && (
+                  <>
+                    <Button variant="outline" onClick={playAudio} size="lg">
+                      {isPlaying ? <Square className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                      {isPlaying ? 'Stop' : 'Play'}
+                    </Button>
+                    
+                    <Button variant="outline" onClick={downloadAudio} size="lg">
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </Button>
+                  </>
+                )}
+              </div>
 
               {/* Status Messages */}
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    {error}
-                    {error.includes('Sign up') && (
-                      <Link href="/pricing" className="ml-2 text-blue-600 hover:underline font-medium">
-                        Sign up now →
-                      </Link>
-                    )}
-                  </AlertDescription>
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
               
@@ -532,18 +501,7 @@ export default function LandingPage() {
               {/* Audio Player */}
               {audioUrl && (
                 <div className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-medium">Generated Audio</h3>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={playAudio}>
-                        {isPlaying ? 'Pause' : 'Play'}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={downloadAudio}>
-                        <Download className="h-4 w-4 mr-2" />
-                        Download
-                      </Button>
-                    </div>
-                  </div>
+                  <h3 className="font-medium mb-3">Generated Audio</h3>
                   <audio 
                     ref={audioRef}
                     controls 
@@ -558,190 +516,65 @@ export default function LandingPage() {
                 </div>
               )}
 
-              {/* Upgrade Prompt for Guests */}
-              {!userStatus.authenticated && audioUrl && (
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-blue-900">Love what you hear?</h4>
-                      <p className="text-sm text-blue-700">Sign up for premium voices, unlimited usage, and more features!</p>
-                    </div>
-                    <Link href="/pricing">
-                      <Button size="sm">
-                        Upgrade Now
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
+              {/* Info Note */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h3 className="font-medium text-yellow-800 mb-2">🚀 Gemini 2.5 Flash Preview TTS</h3>
+                <div className="text-sm text-yellow-700 space-y-1">
+                  <p><strong>Latest AI Voices:</strong> Experience state-of-the-art AI voices including Puck, Charon, Kore, Fenrir, and Aoede</p>
+                  <p><strong>Pricing Plans:</strong> Free (1,000 chars), Starter (₹499), Pro (₹1,499), Enterprise (₹4,999)</p>
+                  <p><strong>Features:</strong> Ultra-fast generation, enhanced natural speech, improved emotional expression</p>
+                  {!isAuthenticated ? (
+                    <Button 
+                      variant="link" 
+                      className="text-blue-600 font-medium hover:underline p-0 h-auto"
+                      onClick={() => setShowAuthModal(true)}
+                    >
+                      → Sign Up for Full Access
+                    </Button>
+                  ) : (
+                    <Link href="/pricing" className="text-blue-600 font-medium hover:underline">
+                      → View Pricing Plans & Upgrade
                     </Link>
+                  )}
+                </div>
+              </div>
+
+              {/* Free Trial CTA for Non-Authenticated Users */}
+              {!isAuthenticated && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      🎉 Free Trial: Try advanced voices with full controls!
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Sign up for unlimited access to premium voices, advanced controls, and download features!
+                    </p>
+                    <div className="space-x-4">
+                      <Button
+                        onClick={() => setShowAuthModal(true)}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-medium"
+                      >
+                        Sign Up for Premium Features →
+                      </Button>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-4">
+                      Experience the latest in AI voice technology with premium features.<br/>
+                      Start free, upgrade when you need more.<br/>
+                      Join thousands of users creating amazing voice content with Gemini TTS.
+                    </p>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
-      )}
-
-      {/* Features Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Why Choose Gemini TTS?
-          </h2>
-          <p className="text-lg text-gray-600">
-            Experience the latest in AI voice technology with premium features
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <Card className="text-center">
-            <CardHeader>
-              <Headphones className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-              <CardTitle>Premium AI Voices</CardTitle>
-              <CardDescription>
-                Access to state-of-the-art AI voices including Puck, Charon, Kore, Fenrir, and Aoede with authentic emotional expression
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="text-center">
-            <CardHeader>
-              <Zap className="h-12 w-12 text-green-600 mx-auto mb-4" />
-              <CardTitle>Ultra-Fast Generation</CardTitle>
-              <CardDescription>
-                Powered by Gemini 2.5 Flash Preview for lightning-fast speech generation with enhanced natural speech patterns
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="text-center">
-            <CardHeader>
-              <Shield className="h-12 w-12 text-purple-600 mx-auto mb-4" />
-              <CardTitle>High-Quality Audio</CardTitle>
-              <CardDescription>
-                Download your generated speech in high-quality WAV format (24kHz, 16-bit, Mono) for professional use
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
       </div>
 
-      {/* Pricing Preview */}
-      <div className="bg-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Flexible Pricing Plans
-            </h2>
-            <p className="text-lg text-gray-600">
-              Start free, upgrade when you need more
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle>Free Trial</CardTitle>
-                <div className="text-2xl font-bold">₹0</div>
-                <CardDescription>Try without signup</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li>• Basic voices (Puck, Kore)</li>
-                  <li>• Limited usage</li>
-                  <li>• No registration required</li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle>Free Plan</CardTitle>
-                <div className="text-2xl font-bold">₹0</div>
-                <CardDescription>1,000 characters/month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li>• Basic voices (Puck, Kore)</li>
-                  <li>• Standard quality audio</li>
-                  <li>• Email support</li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="border-blue-500 border-2 relative">
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <span className="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium">
-                  Most Popular
-                </span>
-              </div>
-              <CardHeader className="text-center">
-                <CardTitle>Starter</CardTitle>
-                <div className="text-2xl font-bold">₹499</div>
-                <CardDescription>25,000 characters/month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li>• All voices (Puck, Charon, Kore)</li>
-                  <li>• High quality audio</li>
-                  <li>• Priority support</li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle>Pro</CardTitle>
-                <div className="text-2xl font-bold">₹1,499</div>
-                <CardDescription>100,000 characters/month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li>• Premium voices (+ Fenrir, Aoede)</li>
-                  <li>• Ultra-high quality</li>
-                  <li>• API access</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="text-center mt-8">
-            <Link href="/pricing">
-              <Button size="lg">
-                View All Plans & Sign Up
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-16">
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            Ready to Get Started?
-          </h2>
-          <p className="text-xl text-blue-100 mb-8">
-            Join thousands of users creating amazing voice content with Gemini TTS
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button 
-              size="lg" 
-              variant="secondary" 
-              className="text-lg px-8 py-3"
-              onClick={() => setShowTrySection(true)}
-            >
-              <Mic className="mr-2 h-5 w-5" />
-              Try Free Now
-            </Button>
-            <Link href="/pricing">
-              <Button size="lg" variant="outline" className="text-lg px-8 py-3 text-white border-white hover:bg-white hover:text-blue-600">
-                <Star className="mr-2 h-5 w-5" />
-                Choose Your Plan
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        initialMode="register"
+      />
+    </>
   )
 }

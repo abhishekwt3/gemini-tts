@@ -1,4 +1,4 @@
-// File: /Users/tripathi/Downloads/tts-frontend/app/layout.tsx
+// File: /Users/tripathi/Documents/apps/gemni-tts/tts-frontend/app/layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

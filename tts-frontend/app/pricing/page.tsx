@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
-import { CheckCircle, AlertCircle, Loader2, Star, User, LogOut, CreditCard } from 'lucide-react'
+import { CheckCircle, AlertCircle, Loader2, Star, User, CreditCard } from 'lucide-react'
 import Link from 'next/link'
+import { useAuth } from '../contexts/AuthContext'
+import Navigation from '../components/Navigation'
+import AuthModal from '../components/AuthModal'
 
 interface PricingPlan {
   id: string
@@ -58,14 +60,7 @@ declare global {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
 export default function PricingPage() {
-  // Auth state
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
-  const [authForm, setAuthForm] = useState({
-    email: '',
-    password: '',
-    name: ''
-  })
+  const { user, token, isAuthenticated } = useAuth()
   
   // Data state
   const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([])
@@ -76,11 +71,25 @@ export default function PricingPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [paymentLoading, setPaymentLoading] = useState('')
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [activeTab, setActiveTab] = useState('pricing')
 
   useEffect(() => {
     initializePage()
     loadRazorpayScript()
   }, [])
+
+  useEffect(() => {
+    // Update tab based on auth status
+    if (isAuthenticated) {
+      setActiveTab('dashboard')
+      if (token) {
+        loadUserDashboard(token)
+      }
+    } else {
+      setActiveTab('pricing')
+    }
+  }, [isAuthenticated, token])
 
   const loadRazorpayScript = () => {
     const script = document.createElement('script')
@@ -92,15 +101,10 @@ export default function PricingPage() {
   const initializePage = async () => {
     try {
       setLoading(true)
+      setError('')
       
       // Load pricing plans
       await loadPricingPlans()
-      
-      // Check if user is logged in
-      const token = localStorage.getItem('tts_token')
-      if (token) {
-        await loadUserDashboard(token)
-      }
       
     } catch (error: any) {
       console.error('Initialization error:', error)
@@ -126,11 +130,11 @@ export default function PricingPage() {
     }
   }
 
-  const loadUserDashboard = async (token: string) => {
+  const loadUserDashboard = async (authToken: string) => {
     try {
       const response = await fetch(`${API_BASE}/api/user/dashboard`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         }
       })
       
@@ -138,65 +142,19 @@ export default function PricingPage() {
       
       if (data.success) {
         setDashboardData(data.dashboard)
-        setIsAuthenticated(true)
       } else {
-        localStorage.removeItem('tts_token')
-        setIsAuthenticated(false)
+        setError('Failed to load dashboard data')
       }
     } catch (error) {
       console.error('Dashboard error:', error)
-      localStorage.removeItem('tts_token')
-      setIsAuthenticated(false)
+      setError('Failed to load dashboard data')
     }
-  }
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    
-    try {
-      const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register'
-      const body = authMode === 'login' 
-        ? { email: authForm.email, password: authForm.password }
-        : authForm
-
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      })
-
-      const data = await response.json()
-      
-      if (data.success) {
-        localStorage.setItem('tts_token', data.token)
-        setIsAuthenticated(true)
-        await loadUserDashboard(data.token)
-        setSuccess(authMode === 'login' ? 'Login successful!' : 'Registration successful!')
-        setAuthForm({ email: '', password: '', name: '' })
-      } else {
-        setError(data.error || 'Authentication failed')
-      }
-    } catch (error) {
-      setError('Network error. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('tts_token')
-    setIsAuthenticated(false)
-    setDashboardData(null)
-    setSuccess('Logged out successfully')
   }
 
   const handlePlanSelection = async (planId: string) => {
     if (!isAuthenticated) {
-      setError('Please login to select a plan')
+      setShowAuthModal(true)
+      setError('Please sign in to select a plan')
       return
     }
     
@@ -209,10 +167,9 @@ export default function PricingPage() {
     }
     
     setPaymentLoading(planId)
+    setError('')
     
     try {
-      const token = localStorage.getItem('tts_token')
-      
       // Create Razorpay order
       const orderResponse = await fetch(`${API_BASE}/api/payments/create-order`, {
         method: 'POST',
@@ -241,8 +198,8 @@ export default function PricingPage() {
           await verifyPayment(response, planId)
         },
         prefill: {
-          name: dashboardData?.user?.name || '',
-          email: dashboardData?.user?.email || ''
+          name: user?.name || '',
+          email: user?.email || ''
         },
         theme: {
           color: '#667eea'
@@ -269,7 +226,6 @@ export default function PricingPage() {
     try {
       setSuccess('Verifying payment...')
       
-      const token = localStorage.getItem('tts_token')
       const verifyResponse = await fetch(`${API_BASE}/api/payments/verify`, {
         method: 'POST',
         headers: {
@@ -291,7 +247,6 @@ export default function PricingPage() {
         
         // Reload dashboard
         setTimeout(async () => {
-          const token = localStorage.getItem('tts_token')
           if (token) {
             await loadUserDashboard(token)
           }
@@ -312,309 +267,378 @@ export default function PricingPage() {
     return Math.min(100, (used / limit) * 100)
   }
 
+  const handleAuthRequired = (action: string) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true)
+      setError(`Please sign in to ${action}`)
+      return false
+    }
+    return true
+  }
+
   if (loading && pricingPlans.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
+      <>
+        <Navigation />
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading pricing plans...</p>
+          </div>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/tts" className="flex items-center">
-              <CreditCard className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-bold text-gray-900">Gemini TTS Pricing</h1>
-            </Link>
-            <div className="flex items-center space-x-4">
+    <>
+      <Navigation />
+      
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Hero Section */}
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+              🎙️ Gemini TTS Pricing
+            </h1>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Choose the perfect plan for your text-to-speech needs. All plans include access to premium AI voices and high-quality audio generation.
+            </p>
+            {!isAuthenticated && (
+              <div className="mt-6">
+                <Button 
+                  onClick={() => setShowAuthModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  Sign Up for Free Trial
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
+              <TabsTrigger value="dashboard" disabled={!isAuthenticated}>
+                {isAuthenticated ? 'My Dashboard' : 'Dashboard (Sign In Required)'}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Pricing Plans Tab */}
+            <TabsContent value="pricing">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {pricingPlans.map((plan) => (
+                  <Card key={plan.id} className={`relative ${plan.popular ? 'border-blue-500 border-2' : ''}`}>
+                    {plan.popular && (
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                        <Badge className="bg-blue-500">
+                          <Star className="h-3 w-3 mr-1" />
+                          Most Popular
+                        </Badge>
+                      </div>
+                    )}
+                    
+                    <CardHeader className="text-center">
+                      <CardTitle className="text-xl">{plan.name}</CardTitle>
+                      <div className="text-3xl font-bold text-blue-600">
+                        ₹{plan.price}
+                        <span className="text-sm font-normal text-gray-500">/{plan.interval}</span>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="space-y-4">
+                      <ul className="space-y-2">
+                        {plan.features.map((feature, index) => (
+                          <li key={index} className="flex items-start">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      
+                      <Button 
+                        className="w-full"
+                        variant={plan.price === 0 ? 'outline' : 'default'}
+                        disabled={
+                          (isAuthenticated && dashboardData?.subscription.plan === plan.id) ||
+                          paymentLoading === plan.id
+                        }
+                        onClick={() => {
+                          if (plan.price === 0) {
+                            handleAuthRequired('get the free plan')
+                          } else {
+                            handlePlanSelection(plan.id)
+                          }
+                        }}
+                      >
+                        {paymentLoading === plan.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isAuthenticated && dashboardData?.subscription.plan === plan.id 
+                          ? 'Current Plan' 
+                          : plan.price === 0 
+                            ? 'Start Free' 
+                            : `Choose ${plan.name}`
+                        }
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Features Comparison */}
+              <div className="mt-12 bg-white rounded-lg shadow p-6">
+                <h3 className="text-2xl font-bold text-center mb-8">Plan Features Comparison</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4">Feature</th>
+                        {pricingPlans.map(plan => (
+                          <th key={plan.id} className="text-center py-3 px-4">{plan.name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b">
+                        <td className="py-3 px-4 font-medium">Monthly Characters</td>
+                        {pricingPlans.map(plan => (
+                          <td key={plan.id} className="text-center py-3 px-4">
+                            {plan.limits.monthlyCharacters === -1 ? 'Unlimited' : plan.limits.monthlyCharacters.toLocaleString()}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-3 px-4 font-medium">API Calls</td>
+                        {pricingPlans.map(plan => (
+                          <td key={plan.id} className="text-center py-3 px-4">
+                            {plan.limits.apiCalls === -1 ? 'Unlimited' : plan.limits.apiCalls.toLocaleString()}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="py-3 px-4 font-medium">Premium Voices</td>
+                        {pricingPlans.map(plan => (
+                          <td key={plan.id} className="text-center py-3 px-4">
+                            {Array.isArray(plan.limits.voices) ? plan.limits.voices.length : plan.limits.voices}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Dashboard Tab */}
+            <TabsContent value="dashboard">
               {isAuthenticated && dashboardData ? (
-                <>
-                  <Badge variant="outline">
-                    {dashboardData.subscription.planName}
-                  </Badge>
-                  <div className="flex items-center space-x-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-700">{dashboardData.user.name}</span>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Account Info */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <User className="h-5 w-5 mr-2" />
+                        Account Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Name</label>
+                        <p className="text-sm">{dashboardData.user.name}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Email</label>
+                        <p className="text-sm">{dashboardData.user.email}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Plan</label>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="outline">{dashboardData.subscription.planName}</Badge>
+                          <span className="text-xs text-gray-500">
+                            Status: {dashboardData.subscription.status}
+                          </span>
+                        </div>
+                      </div>
+                      {dashboardData.subscription.expiresAt && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Expires</label>
+                          <p className="text-sm">
+                            {new Date(dashboardData.subscription.expiresAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Usage Stats */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Usage Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span>Characters Used</span>
+                          <span>
+                            {dashboardData.usage.monthlyCharacters.toLocaleString()}/
+                            {dashboardData.usage.monthlyCharactersLimit === -1 
+                              ? '∞' 
+                              : dashboardData.usage.monthlyCharactersLimit.toLocaleString()
+                            }
+                          </span>
+                        </div>
+                        <Progress 
+                          value={getUsagePercentage(
+                            dashboardData.usage.monthlyCharacters,
+                            dashboardData.usage.monthlyCharactersLimit
+                          )} 
+                        />
+                      </div>
+                      
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span>API Calls</span>
+                          <span>
+                            {dashboardData.usage.apiCalls.toLocaleString()}/
+                            {dashboardData.usage.apiCallsLimit === -1 
+                              ? '∞' 
+                              : dashboardData.usage.apiCallsLimit.toLocaleString()
+                            }
+                          </span>
+                        </div>
+                        <Progress 
+                          value={getUsagePercentage(
+                            dashboardData.usage.apiCalls,
+                            dashboardData.usage.apiCallsLimit
+                          )} 
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <p className="text-xs text-gray-500">
+                          {dashboardData.usage.charactersRemaining === 'Unlimited' 
+                            ? 'Unlimited characters remaining'
+                            : `${dashboardData.usage.charactersRemaining} characters remaining this month`
+                          }
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Available Voices */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Available Voices</CardTitle>
+                      <CardDescription>
+                        Voices included in your current plan
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {dashboardData.availableVoices.map((voice, index) => (
+                          <div key={index} className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+                            <span className="text-sm">{voice}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Quick Actions */}
+                  <Card className="md:col-span-2 lg:col-span-3">
+                    <CardHeader>
+                      <CardTitle>Quick Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-4">
+                        <Link href="/tts">
+                          <Button>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Go to TTS Generator
+                          </Button>
+                        </Link>
+                        <Button variant="outline" onClick={() => setActiveTab('pricing')}>
+                          View All Plans
+                        </Button>
+                        {getUsagePercentage(dashboardData.usage.monthlyCharacters, dashboardData.usage.monthlyCharactersLimit) > 80 && (
+                          <Button variant="outline" className="border-orange-500 text-orange-600">
+                            Upgrade Plan (Usage Almost Full)
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               ) : (
-                <Link href="/tts">
-                  <Button variant="outline" size="sm">
-                    Try TTS
-                  </Button>
-                </Link>
+                <Card className="max-w-md mx-auto">
+                  <CardContent className="pt-6 text-center">
+                    <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Sign In Required</h3>
+                    <p className="text-gray-600 mb-4">
+                      Please sign in to view your dashboard and manage your subscription.
+                    </p>
+                    <Button onClick={() => setShowAuthModal(true)} className="w-full">
+                      Sign In / Sign Up
+                    </Button>
+                  </CardContent>
+                </Card>
               )}
+            </TabsContent>
+          </Tabs>
+
+          {/* Status Messages */}
+          {error && (
+            <Alert variant="destructive" className="mt-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          {success && (
+            <Alert className="mt-6">
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* FAQ Section */}
+          <div className="mt-16 bg-white rounded-lg shadow p-8">
+            <h3 className="text-2xl font-bold text-center mb-8">Frequently Asked Questions</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <h4 className="font-semibold mb-2">How does billing work?</h4>
+                <p className="text-sm text-gray-600">
+                  All plans are billed monthly. You can upgrade or downgrade at any time, and changes take effect immediately.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">What happens if I exceed my limits?</h4>
+                <p className="text-sm text-gray-600">
+                  You'll receive notifications when approaching limits. Generation will be paused until next billing cycle or plan upgrade.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">Can I cancel anytime?</h4>
+                <p className="text-sm text-gray-600">
+                  Yes, you can cancel your subscription at any time. You'll retain access until the end of your billing period.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">Do you offer refunds?</h4>
+                <p className="text-sm text-gray-600">
+                  We offer a 7-day money-back guarantee for all paid plans. Contact support for assistance.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Hero Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            🎙️ Gemini TTS Pricing
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Choose the perfect plan for your text-to-speech needs. All plans include access to premium AI voices and high-quality audio generation.
-          </p>
-        </div>
-
-        <Tabs defaultValue={isAuthenticated ? "dashboard" : "auth"} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="auth">Authentication</TabsTrigger>
-            <TabsTrigger value="pricing">Pricing Plans</TabsTrigger>
-            <TabsTrigger value="dashboard" disabled={!isAuthenticated}>Dashboard</TabsTrigger>
-          </TabsList>
-
-          {/* Authentication Tab */}
-          <TabsContent value="auth">
-            {!isAuthenticated ? (
-              <Card className="max-w-md mx-auto">
-                <CardHeader>
-                  <div className="flex justify-center space-x-1 mb-4">
-                    <Button
-                      variant={authMode === 'login' ? 'default' : 'outline'}
-                      onClick={() => setAuthMode('login')}
-                    >
-                      Login
-                    </Button>
-                    <Button
-                      variant={authMode === 'register' ? 'default' : 'outline'}
-                      onClick={() => setAuthMode('register')}
-                    >
-                      Register
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleAuth} className="space-y-4">
-                    {authMode === 'register' && (
-                      <div>
-                        <Input
-                          type="text"
-                          placeholder="Full Name"
-                          value={authForm.name}
-                          onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
-                          required
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <Input
-                        type="email"
-                        placeholder="Email"
-                        value={authForm.email}
-                        onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="password"
-                        placeholder="Password"
-                        value={authForm.password}
-                        onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-                        required
-                      />
-                    </div>
-                    
-                    <Button type="submit" className="w-full" disabled={loading}>
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {authMode === 'login' ? 'Sign In' : 'Sign Up'}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="max-w-md mx-auto">
-                <CardContent className="pt-6 text-center">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Welcome back!</h3>
-                  <p className="text-gray-600 mb-4">You are logged in as {dashboardData?.user.name}</p>
-                  <div className="space-y-2">
-                    <Link href="/tts">
-                      <Button className="w-full">Go to TTS Generator</Button>
-                    </Link>
-                    <Button variant="outline" onClick={handleLogout} className="w-full">
-                      Logout
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Pricing Plans Tab */}
-          <TabsContent value="pricing">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {pricingPlans.map((plan) => (
-                <Card key={plan.id} className={`relative ${plan.popular ? 'border-blue-500 border-2' : ''}`}>
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <Badge className="bg-blue-500">
-                        <Star className="h-3 w-3 mr-1" />
-                        Most Popular
-                      </Badge>
-                    </div>
-                  )}
-                  
-                  <CardHeader className="text-center">
-                    <CardTitle className="text-xl">{plan.name}</CardTitle>
-                    <div className="text-3xl font-bold text-blue-600">
-                      ₹{plan.price}
-                      <span className="text-sm font-normal text-gray-500">/{plan.interval}</span>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent className="space-y-4">
-                    <ul className="space-y-2">
-                      {plan.features.map((feature, index) => (
-                        <li key={index} className="flex items-start">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    
-                    <Button 
-                      className="w-full"
-                      variant={plan.price === 0 ? 'outline' : 'default'}
-                      disabled={
-                        !isAuthenticated || 
-                        (dashboardData?.subscription.plan === plan.id) ||
-                        paymentLoading === plan.id
-                      }
-                      onClick={() => handlePlanSelection(plan.id)}
-                    >
-                      {paymentLoading === plan.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {dashboardData?.subscription.plan === plan.id 
-                        ? 'Current Plan' 
-                        : plan.price === 0 
-                          ? 'Free Plan' 
-                          : `Choose ${plan.name}`
-                      }
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* Dashboard Tab */}
-          <TabsContent value="dashboard">
-            {dashboardData && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Account Info */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Account Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Name</label>
-                      <p className="text-sm">{dashboardData.user.name}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Email</label>
-                      <p className="text-sm">{dashboardData.user.email}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Plan</label>
-                      <p className="text-sm font-medium">{dashboardData.subscription.planName}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Usage Stats */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Usage Statistics</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>Characters Used</span>
-                        <span>
-                          {dashboardData.usage.monthlyCharacters}/
-                          {dashboardData.usage.monthlyCharactersLimit === -1 
-                            ? '∞' 
-                            : dashboardData.usage.monthlyCharactersLimit
-                          }
-                        </span>
-                      </div>
-                      <Progress 
-                        value={getUsagePercentage(
-                          dashboardData.usage.monthlyCharacters,
-                          dashboardData.usage.monthlyCharactersLimit
-                        )} 
-                      />
-                    </div>
-                    
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>API Calls</span>
-                        <span>
-                          {dashboardData.usage.apiCalls}/
-                          {dashboardData.usage.apiCallsLimit === -1 
-                            ? '∞' 
-                            : dashboardData.usage.apiCallsLimit
-                          }
-                        </span>
-                      </div>
-                      <Progress 
-                        value={getUsagePercentage(
-                          dashboardData.usage.apiCalls,
-                          dashboardData.usage.apiCallsLimit
-                        )} 
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Available Voices */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Available Voices</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {dashboardData.availableVoices.map((voice, index) => (
-                        <div key={index} className="flex items-center">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                          <span className="text-sm">{voice}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-
-        {/* Status Messages */}
-        {error && (
-          <Alert variant="destructive" className="mt-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert className="mt-6">
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        )}
       </div>
-    </div>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        initialMode="register"
+      />
+    </>
   )
 }
