@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini TTS Voice Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            font-size: 16px;
+            resize: vertical;
+            transition: border-color 0.3s ease;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            font-size: 16px;
+            background-color: white;
+            transition: border-color 0.3s ease;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+        }
+
+        .control-group {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .control-group label {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #495057;
+            border: 2px solid #dee2e6;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        }
+
+        .btn-download:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .audio-player {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .audio-player.show {
+            display: block;
+        }
+
+        audio {
+            width: 100%;
+            max-width: 400px;
+            margin: 10px 0;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .note {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #ffeaa7;
+        }
+
+        .note h3 {
+            margin-bottom: 10px;
+            color: #856404;
+        }
+
+        .user-widget {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .user-widget-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .upgrade-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: transform 0.2s ease;
+        }
+
+        .upgrade-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .user-info {
+            font-size: 14px;
+            color: #555;
+        }
+
+        .usage-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .usage-bar {
+            width: 100px;
+            height: 6px;
+            background: #e1e8ed;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .usage-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+        }
+
+        .limit-warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #ffeaa7;
+            display: none;
+        }
+
+        .limit-warning.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Gemini TTS Voice Generator</h1>
+        
+        <div class="form-group">
+            <label for="textInput">Text to Convert:</label>
+            <textarea 
+                id="textInput" 
+                placeholder="Enter the text you want to convert to speech..."
+                maxlength="5000"
+            >Hello! This is a demonstration of the Gemini 2.5 Flash Preview TTS interface with advanced AI-generated voices including Puck, Charon, Kore, Fenrir, and Aoede.</textarea>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="languageSelect">Language:</label>
+                <select id="languageSelect">
+                    <option value="">Loading languages...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="voiceSelect">Voice:</label>
+                <select id="voiceSelect">
+                    <option value="">Select a language first</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="speedRange">Speed: <span id="speedValue">1.0</span></label>
+                <input type="range" id="speedRange" min="0.1" max="2" step="0.1" value="1">
+            </div>
+            <div class="control-group">
+                <label for="pitchRange">Pitch: <span id="pitchValue">1.0</span></label>
+                <input type="range" id="pitchRange" min="0" max="2" step="0.1" value="1">
+            </div>
+            <div class="control-group">
+                <label for="volumeRange">Volume: <span id="volumeValue">1.0</span></label>
+                <input type="range" id="volumeRange" min="0" max="1" step="0.1" value="1">
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button id="generateBtn" class="btn-primary">🎵 Generate Speech</button>
+            <button id="stopBtn" class="btn-secondary" disabled>⏹️ Stop</button>
+            <button id="downloadBtn" class="btn-download" disabled>⬇️ Download Audio</button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div id="audioPlayer" class="audio-player">
+            <h3>Generated Audio</h3>
+            <audio id="audio" controls></audio>
+            <p>Audio ready for playback and download</p>
+        </div>
+
+        <div class="note">
+            <h3>🚀 Gemini 2.5 Flash Preview TTS with Pricing Plans</h3>
+            <p><strong>Latest AI Voices:</strong> Experience state-of-the-art AI voices including Puck, Charon, Kore, Fenrir, and Aoede with authentic emotional expression.</p>
+            <p><strong>Pricing Plans Available:</strong> 
+                • <strong>Free</strong>: 1,000 characters/month, basic voices<br>
+                • <strong>Starter (₹499)</strong>: 25,000 characters/month, all voices<br>
+                • <strong>Pro (₹1,499)</strong>: 100,000 characters/month, premium features<br>
+                • <strong>Enterprise (₹4,999)</strong>: Unlimited usage, custom solutions
+            </p>
+            <p><strong>Advanced Features:</strong> 
+                • Ultra-fast generation with Flash Preview<br>
+                • Enhanced natural speech patterns<br>
+                • Improved emotional expression<br>
+                • Usage tracking and analytics<br>
+                • Secure payment processing with Razorpay
+            </p>
+            <p><a href="/pricing.html" style="color: #667eea; font-weight: bold;">→ View Pricing Plans & Sign Up</a></p>
+        </div>
+    </div>
+
+    <script>
+        let currentAudioId = null;
+        let isGenerating = false;
+
+        // DOM elements
+        const textInput = document.getElementById('textInput');
+        const languageSelect = document.getElementById('languageSelect');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const speedRange = document.getElementById('speedRange');
+        const pitchRange = document.getElementById('pitchRange');
+        const volumeRange = document.getElementById('volumeRange');
+        const speedValue = document.getElementById('speedValue');
+        const pitchValue = document.getElementById('pitchValue');
+        const volumeValue = document.getElementById('volumeValue');
+        const generateBtn = document.getElementById('generateBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const status = document.getElementById('status');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const audio = document.getElementById('audio');
+
+        // Store all available voices
+        let allLanguages = [];
+        let currentVoices = [];
+        let userStatus = { authenticated: false, plan: 'free', usage: null };
+
+        // API base URL (adjust if server runs on different port)
+        const API_BASE = window.location.origin;
+
+        // Update user widget based on status
+        function updateUserWidget(status) {
+            const userWidget = document.getElementById('userWidget');
+            const userStatusElement = document.getElementById('userStatus');
+
+            // Check if elements exist
+            if (!userWidget || !userStatusElement) {
+                console.warn('User widget elements not found, skipping update');
+                return;
+            }
+
+            if (status === 'guest') {
+                userStatusElement.innerHTML = `
+                    <span>🎯 Free Tier: Limited to basic voices (Puck, Kore)</span>
+                    <a href="/pricing.html" class="upgrade-link">Sign Up for Premium Voices</a>
+                `;
+            } else if (status === 'authenticated') {
+                const usage = userStatus.usage;
+                const charactersUsed = usage.monthlyCharacters;
+                const charactersLimit = usage.monthlyCharactersLimit;
+                const charactersRemaining = usage.charactersRemaining;
+                
+                let usagePercent = 0;
+                if (charactersLimit !== -1) {
+                    usagePercent = Math.min(100, (charactersUsed / charactersLimit) * 100);
+                }
+                
+                userStatusElement.innerHTML = `
+                    <div class="user-info">
+                        <strong>Welcome, ${userStatus.user.name}!</strong> | Plan: <strong>${userStatus.planName}</strong>
+                    </div>
+                    <div class="usage-indicator">
+                        <span>${charactersUsed} / ${charactersLimit === -1 ? '∞' : charactersLimit} chars</span>
+                        <div class="usage-bar">
+                            <div class="usage-fill" style="width: ${usagePercent}%"></div>
+                        </div>
+                        ${charactersLimit !== -1 && usagePercent > 80 ? 
+                            '<a href="/pricing.html" class="upgrade-link">Upgrade Plan</a>' : 
+                            '<a href="/pricing.html" class="upgrade-link">Manage Plan</a>'
+                        }
+                    </div>
+                `;
+
+                // Show warning if nearing limit
+                if (charactersLimit !== -1 && usagePercent > 90) {
+                    showStatus(`⚠️ You've used ${Math.round(usagePercent)}% of your monthly character limit. Consider upgrading your plan.`, 'processing');
+                }
+            }
+        }
+
+        // Check authentication status
+        async function checkAuthenticationStatus() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                updateUserWidget('guest');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/user/dashboard`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    userStatus = {
+                        authenticated: true,
+                        plan: data.dashboard.subscription.plan,
+                        planName: data.dashboard.subscription.planName,
+                        usage: data.dashboard.usage,
+                        user: data.dashboard.user
+                    };
+                    updateUserWidget('authenticated');
+                } else {
+                    // Token invalid
+                    localStorage.removeItem('authToken');
+                    updateUserWidget('guest');
+                }
+            } catch (error) {
+                console.error('Authentication check failed:', error);
+                updateUserWidget('guest');
+            }
+        }
+
+        // Initialize the application
+        async function initializeApp() {
+            try {
+                showStatus('Initializing Gemini 2.5 Flash Preview TTS...', 'processing');
+                
+                // Wait for DOM to be fully loaded
+                if (document.readyState !== 'complete') {
+                    await new Promise(resolve => {
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', resolve);
+                        } else {
+                            resolve();
+                        }
+                    });
+                }
+                
+                // Check authentication status first
+                await checkAuthenticationStatus();
+                
+                // Check server health
+                const healthResponse = await fetch(`${API_BASE}/api/health`);
+                const healthData = await healthResponse.json();
+                
+                if (!healthData.success || !healthData.ttsAvailable) {
+                    throw new Error('Gemini 2.5 Flash Preview TTS service not available. Please check API key configuration.');
+                }
+                
+                // Load available languages
+                await loadLanguages();
+                showStatus('Ready to generate speech!', 'success');
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showStatus(`Initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Load available languages from server
+        async function loadLanguages() {
+            try {
+                const response = await fetch(`${API_BASE}/api/languages`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load languages');
+                }
+                
+                allLanguages = data.languages;
+                
+                // Populate language selector
+                languageSelect.innerHTML = '<option value="">Select Language</option>';
+                allLanguages.forEach(lang => {
+                    const option = document.createElement('option');
+                    option.value = lang.code;
+                    option.textContent = `${lang.name} (${lang.voiceCount} voices)`;
+                    languageSelect.appendChild(option);
+                });
+                
+                // Auto-select English if available
+                const englishLang = allLanguages.find(lang => lang.code.startsWith('en-US'));
+                if (englishLang) {
+                    languageSelect.value = englishLang.code;
+                    await filterVoicesByLanguage(englishLang.code);
+                }
+                
+            } catch (error) {
+                console.error('Error loading languages:', error);
+                showStatus(`Failed to load languages: ${error.message}`, 'error');
+            }
+        }
+
+        // Filter voices by selected language
+        async function filterVoicesByLanguage(selectedLang) {
+            try {
+                if (!selectedLang) {
+                    voiceSelect.innerHTML = '<option value="">Select a language first</option>';
+                    return;
+                }
+                
+                showStatus('Loading voices...', 'processing');
+                
+                const response = await fetch(`${API_BASE}/api/voices/${selectedLang}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load voices');
+                }
+                
+                currentVoices = data.voices;
+                voiceSelect.innerHTML = '';
+                
+                if (currentVoices.length === 0) {
+                    voiceSelect.innerHTML = '<option value="">No voices available for this language</option>';
+                    return;
+                }
+
+                // Add voices to selector
+                currentVoices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.displayName;
+                    voiceSelect.appendChild(option);
+                });
+                
+                // Auto-select first voice
+                if (currentVoices.length > 0) {
+                    voiceSelect.selectedIndex = 0;
+                }
+                
+                showStatus('Voices loaded successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Error loading voices:', error);
+                showStatus(`Failed to load voices: ${error.message}`, 'error');
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+            }
+        }
+
+        // Language selector change handler
+        languageSelect.addEventListener('change', (e) => {
+            filterVoicesByLanguage(e.target.value);
+        });
+
+        // Update range value displays
+        speedRange.addEventListener('input', () => {
+            speedValue.textContent = speedRange.value;
+        });
+
+        pitchRange.addEventListener('input', () => {
+            pitchValue.textContent = pitchRange.value;
+        });
+
+        volumeRange.addEventListener('input', () => {
+            volumeValue.textContent = volumeRange.value;
+        });
+
+        // Show status message
+        function showStatus(message, type = 'processing') {
+            status.textContent = message;
+            status.className = `status show ${type}`;
+            setTimeout(() => {
+                if (status.textContent === message) { // Only hide if message hasn't changed
+                    status.classList.remove('show');
+                }
+            }, type === 'error' ? 8000 : 4000);
+        }
+
+        // Generate speech using server API
+        async function generateSpeech() {
+            const text = textInput.value.trim();
+            
+            if (!text) {
+                showStatus('Please enter some text to convert.', 'error');
+                return;
+            }
+
+            if (text.length > 5000) {
+                showStatus('Text is too long. Please limit to 5000 characters.', 'error');
+                return;
+            }
+
+            if (!languageSelect.value) {
+                showStatus('Please select a language.', 'error');
+                return;
+            }
+
+            if (!voiceSelect.value) {
+                showStatus('Please select a voice.', 'error');
+                return;
+            }
+
+            if (isGenerating) {
+                showStatus('Speech generation already in progress.', 'error');
+                return;
+            }
+
+            try {
+                isGenerating = true;
+                generateBtn.disabled = true;
+                stopBtn.disabled = false;
+                downloadBtn.disabled = true;
+                audioPlayer.classList.remove('show');
+                
+                showStatus('Generating speech with Gemini 2.5 Flash Preview TTS...', 'processing');
+                
+                const requestBody = {
+                    text: text,
+                    voiceId: voiceSelect.value,
+                    languageCode: languageSelect.value,
+                    speed: parseFloat(speedRange.value),
+                    pitch: parseFloat(pitchRange.value) - 1.0 // Convert to -1 to +1 range
+                };
+
+                // Prepare headers
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+
+                // Add authorization header if user is authenticated
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                const response = await fetch(`${API_BASE}/api/generate-speech`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    // Handle specific error cases
+                    if (response.status === 429) {
+                        // Usage limit exceeded
+                        showStatus(`${data.error} Click here to upgrade your plan.`, 'error');
+                        setTimeout(() => {
+                            const upgradeLink = document.createElement('a');
+                            upgradeLink.href = '/pricing.html';
+                            upgradeLink.textContent = 'Upgrade Plan';
+                            upgradeLink.className = 'upgrade-link';
+                            upgradeLink.style.marginLeft = '10px';
+                            
+                            const statusElement = document.getElementById('status');
+                            if (statusElement.classList.contains('show')) {
+                                statusElement.appendChild(upgradeLink);
+                            }
+                        }, 100);
+                        return;
+                    } else if (response.status === 403) {
+                        // Voice not available in plan
+                        showStatus(`${data.error} Please select an available voice or upgrade your plan.`, 'error');
+                        return;
+                    } else {
+                        throw new Error(data.error || 'Failed to generate speech');
+                    }
+                }
+                
+                currentAudioId = data.audioId;
+                
+                // Set up audio player
+                audio.src = `${API_BASE}${data.url}`;
+                audio.volume = parseFloat(volumeRange.value);
+                audioPlayer.classList.add('show');
+                downloadBtn.disabled = false;
+                
+                // Show generation success with usage info
+                let successMessage = `Speech generated successfully using ${data.voice}!`;
+                if (data.charactersUsed && data.remainingCharacters !== null) {
+                    if (data.remainingCharacters === 'Unlimited') {
+                        successMessage += ` (${data.charactersUsed} characters used)`;
+                    } else {
+                        successMessage += ` (${data.charactersUsed} characters used, ${data.remainingCharacters} remaining)`;
+                    }
+                }
+                
+                showStatus(successMessage, 'success');
+                
+                // Update user status if authenticated
+                if (userStatus.authenticated) {
+                    await checkAuthenticationStatus(); // Refresh usage data
+                }
+                
+                // Auto-play the audio
+                try {
+                    await audio.play();
+                } catch (playError) {
+                    console.log('Auto-play prevented:', playError);
+                    showStatus('Speech ready! Click play to listen.', 'success');
+                }
+                
+            } catch (error) {
+                console.error('Speech generation error:', error);
+                showStatus(`Generation failed: ${error.message}`, 'error');
+            } finally {
+                isGenerating = false;
+                generateBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+
+        // Stop speech generation (for future use if needed)
+        function stopSpeech() {
+            if (audio && !audio.paused) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+            
+            isGenerating = false;
+            generateBtn.disabled = false;
+            stopBtn.disabled = true;
+            showStatus('Speech stopped.', 'success');
+        }
+
+        // Download audio
+        function downloadAudio() {
+            if (!currentAudioId) {
+                showStatus('No audio available for download.', 'error');
+                return;
+            }
+
+            try {
+                // Create download link
+                const downloadUrl = `${API_BASE}/api/download/${currentAudioId}`;
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `gemini-tts-${currentAudioId}.mp3`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                showStatus('Download started!', 'success');
+            } catch (error) {
+                console.error('Download error:', error);
+                showStatus('Download failed. Please try again.', 'error');
+            }
+        }
+
+        // Update audio volume when range changes
+        volumeRange.addEventListener('input', () => {
+            if (audio) {
+                audio.volume = parseFloat(volumeRange.value);
+            }
+        });
+
+        // Event listeners
+        generateBtn.addEventListener('click', generateSpeech);
+        stopBtn.addEventListener('click', stopSpeech);
+        downloadBtn.addEventListener('click', downloadAudio);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                if (!generateBtn.disabled && !isGenerating) {
+                    generateSpeech();
+                }
+            }
+            if (e.key === 'Escape') {
+                if (!stopBtn.disabled) {
+                    stopSpeech();
+                }
+            }
+        });
+
+        // Character counter for text input
+        textInput.addEventListener('input', () => {
+            const length = textInput.value.length;
+            const maxLength = 5000;
+            
+            if (length > maxLength * 0.9) {
+                const remaining = maxLength - length;
+                if (remaining > 0) {
+                    showStatus(`${remaining} characters remaining`, 'processing');
+                } else {
+                    showStatus('Character limit exceeded!', 'error');
+                }
+            }
+        });
+
+        // Initialize the application when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Small delay to ensure all elements are rendered
+            setTimeout(initializeApp, 100);
+        });
+    </script>
+</body>
+</html>
