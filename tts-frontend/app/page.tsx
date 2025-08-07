@@ -9,7 +9,9 @@ import { Slider } from '@/components/ui/slider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Play, Download, Square, Mic, User, LogOut, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
+import { Play, Download, Square, Mic, User, LogOut, AlertCircle, CheckCircle, Loader2, FileText, Youtube, Megaphone, Package, Video, Copy, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from './contexts/AuthContext'
 import Navigation from './components/Navigation'
@@ -45,6 +47,22 @@ interface UserStatus {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
+const SCRIPT_TYPES = [
+  { id: 'youtube', name: 'YouTube Video', icon: Youtube, description: 'Engaging scripts for YouTube content' },
+  { id: 'advertising', name: 'Advertisement', icon: Megaphone, description: 'Compelling advertising copy' },
+  { id: 'product_demo', name: 'Product Demo', icon: Package, description: 'Product demonstration scripts' },
+  { id: 'reel', name: 'Social Media Reel', icon: Video, description: 'Short-form social content' }
+]
+
+const SCRIPT_STYLES = [
+  { id: 'professional', name: 'Professional', description: 'Formal and business-oriented' },
+  { id: 'casual', name: 'Casual', description: 'Friendly and conversational' },
+  { id: 'energetic', name: 'Energetic', description: 'High-energy and exciting' },
+  { id: 'informative', name: 'Informative', description: 'Educational and detailed' },
+  { id: 'humorous', name: 'Humorous', description: 'Fun and entertaining' },
+  { id: 'emotional', name: 'Emotional', description: 'Touching and heartfelt' }
+]
+
 export default function TTSPage() {
   const { user, token, isAuthenticated, logout } = useAuth()
   
@@ -58,6 +76,14 @@ export default function TTSPage() {
   const [pitch, setPitch] = useState([1])
   const [volume, setVolume] = useState([1])
   
+  // Script Generator State
+  const [scriptTopic, setScriptTopic] = useState('')
+  const [scriptType, setScriptType] = useState('')
+  const [scriptStyle, setScriptStyle] = useState('')
+  const [scriptDuration, setScriptDuration] = useState('')
+  const [generatedScript, setGeneratedScript] = useState('')
+  const [scriptLoading, setScriptLoading] = useState(false)
+  
   // Audio State
   const [audioUrl, setAudioUrl] = useState('')
   const [audioId, setAudioId] = useState('')
@@ -70,6 +96,7 @@ export default function TTSPage() {
   const [success, setSuccess] = useState('')
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [activeTab, setActiveTab] = useState('tts')
 
   // Initialize app
   useEffect(() => {
@@ -180,6 +207,84 @@ export default function TTSPage() {
     setSelectedLanguage(languageCode)
     setSelectedVoice('')
     loadVoices(languageCode)
+  }
+
+  const generateScript = async () => {
+    if (!scriptTopic.trim()) {
+      setError('Please enter a topic or idea for your script')
+      return
+    }
+
+    if (!scriptType) {
+      setError('Please select a script type')
+      return
+    }
+
+    if (!scriptStyle) {
+      setError('Please select a script style')
+      return
+    }
+
+    setScriptLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+
+      if (isAuthenticated && token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`${API_BASE}/api/generate-script`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          topic: scriptTopic,
+          type: scriptType,
+          style: scriptStyle,
+          duration: scriptDuration
+        })
+      })
+
+      const data = await response.json()
+      
+      if (!data.success) {
+        if (response.status === 401) {
+          setError('Please sign in to use the script generator')
+          setShowAuthModal(true)
+        } else {
+          throw new Error(data.error || 'Failed to generate script')
+        }
+        return
+      }
+      
+      setGeneratedScript(data.script)
+      setSuccess('Script generated successfully!')
+      
+    } catch (error: any) {
+      console.error('Script generation error:', error)
+      setError(`Script generation failed: ${error.message}`)
+    } finally {
+      setScriptLoading(false)
+    }
+  }
+
+  const copyScriptToTTS = () => {
+    setText(generatedScript)
+    setActiveTab('tts')
+    setSuccess('Script copied to TTS generator!')
+  }
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedScript)
+      setSuccess('Script copied to clipboard!')
+    } catch (error) {
+      setError('Failed to copy script')
+    }
   }
 
   const generateSpeech = async () => {
@@ -316,7 +421,7 @@ export default function TTSPage() {
       <Navigation />
       
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* User Status Widget */}
           {userStatus?.authenticated && (
             <Card className="mb-6">
@@ -349,139 +454,328 @@ export default function TTSPage() {
             </Card>
           )}
 
-          {/* Main TTS Interface */}
+          {/* Main Interface with Tabs */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <Mic className="h-5 w-5 mr-2" />
-                Gemini TTS Voice Generator
+                <Sparkles className="h-5 w-5 mr-2" />
+                Gemini AI Content Generator
               </CardTitle>
               <CardDescription>
-                Convert your text to natural-sounding speech using Gemini 2.5 Flash Preview TTS
+                Generate scripts and convert them to natural-sounding speech using Gemini 2.5 Flash Preview
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Text Input */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Text to Convert ({text.length}/5000 characters)
-                </label>
-                <Textarea
-                  placeholder="Enter the text you want to convert to speech..."
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  rows={6}
-                  maxLength={5000}
-                  className="resize-none"
-                />
-              </div>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="script" className="flex items-center">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Script Generator
+                  </TabsTrigger>
+                  <TabsTrigger value="tts" className="flex items-center">
+                    <Mic className="h-4 w-4 mr-2" />
+                    TTS Generator
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Language and Voice Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Language</label>
-                  <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select language" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {languages.map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.name} ({lang.voiceCount} voices)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Voice</label>
-                  <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select voice" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {voices.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.id}>
-                          {voice.displayName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                {/* Script Generator Tab */}
+                <TabsContent value="script" className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Input Section */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Topic / Idea / Details
+                        </label>
+                        <Textarea
+                          placeholder="Describe your script idea, topic, or provide details about what you want to create..."
+                          value={scriptTopic}
+                          onChange={(e) => setScriptTopic(e.target.value)}
+                          rows={4}
+                          className="resize-none"
+                        />
+                      </div>
 
-              {/* Audio Controls */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Speed: {speed[0]}x
-                  </label>
-                  <Slider
-                    value={speed}
-                    onValueChange={setSpeed}
-                    max={2}
-                    min={0.1}
-                    step={0.1}
-                    className="w-full"
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Pitch: {pitch[0]}x
-                  </label>
-                  <Slider
-                    value={pitch}
-                    onValueChange={setPitch}
-                    max={2}
-                    min={0}
-                    step={0.1}
-                    className="w-full"
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Volume: {volume[0]}
-                  </label>
-                  <Slider
-                    value={volume}
-                    onValueChange={setVolume}
-                    max={1}
-                    min={0}
-                    step={0.1}
-                    className="w-full"
-                  />
-                </div>
-              </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium mb-2 block">Script Type</label>
+                          <Select value={scriptType} onValueChange={setScriptType}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select script type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SCRIPT_TYPES.map((type) => (
+                                <SelectItem key={type.id} value={type.id}>
+                                  <div className="flex items-center">
+                                    <type.icon className="h-4 w-4 mr-2" />
+                                    {type.name}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-4 justify-center">
-                <Button 
-                  onClick={generateSpeech} 
-                  disabled={loading || !text.trim()}
-                  size="lg"
-                >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <Mic className="mr-2 h-4 w-4" />
-                  Generate Speech
-                </Button>
-                
-                {audioUrl && (
-                  <>
-                    <Button variant="outline" onClick={playAudio} size="lg">
-                      {isPlaying ? <Square className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                      {isPlaying ? 'Stop' : 'Play'}
+                        <div>
+                          <label className="text-sm font-medium mb-2 block">Script Style</label>
+                          <Select value={scriptStyle} onValueChange={setScriptStyle}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select style" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SCRIPT_STYLES.map((style) => (
+                                <SelectItem key={style.id} value={style.id}>
+                                  {style.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Target Duration (optional)
+                        </label>
+                        <Input
+                          placeholder="e.g., 30 seconds, 2 minutes, 5 minutes"
+                          value={scriptDuration}
+                          onChange={(e) => setScriptDuration(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Quick Prompt Buttons */}
+                      <div className="border rounded-lg p-4 bg-gray-50">
+                        <h3 className="font-medium mb-3">Quick Script Ideas</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                          {SCRIPT_TYPES.map((type) => (
+                            <Button
+                              key={type.id}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setScriptType(type.id)
+                                setScriptTopic(`Create a ${type.description.toLowerCase()} about...`)
+                              }}
+                              className="justify-start h-auto p-3"
+                            >
+                              <type.icon className="h-4 w-4 mr-2" />
+                              <div className="text-left">
+                                <div className="font-medium text-xs">{type.name}</div>
+                                <div className="text-xs text-gray-500">{type.description}</div>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Button 
+                        onClick={generateScript} 
+                        disabled={scriptLoading || !scriptTopic.trim()}
+                        className="w-full"
+                        size="lg"
+                      >
+                        {scriptLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        <FileText className="mr-2 h-4 w-4" />
+                        Generate Script
+                      </Button>
+                    </div>
+
+                    {/* Output Section */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Generated Script
+                        </label>
+                        <div className="relative">
+                          <Textarea
+                            placeholder="Your generated script will appear here..."
+                            value={generatedScript}
+                            onChange={(e) => setGeneratedScript(e.target.value)}
+                            rows={12}
+                            className="resize-none"
+                          />
+                          {generatedScript && (
+                            <div className="absolute top-2 right-2 flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={copyToClipboard}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {generatedScript && (
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={copyScriptToTTS}
+                            className="flex-1"
+                            variant="outline"
+                          >
+                            <Mic className="mr-2 h-4 w-4" />
+                            Convert to Speech
+                          </Button>
+                          <Button
+                            onClick={copyToClipboard}
+                            variant="outline"
+                            size="icon"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* TTS Generator Tab */}
+                <TabsContent value="tts" className="space-y-6">
+                  {/* Text Input */}
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Text to Convert ({text.length}/5000 characters)
+                    </label>
+                    <Textarea
+                      placeholder="Enter the text you want to convert to speech..."
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      rows={6}
+                      maxLength={5000}
+                      className="resize-none"
+                    />
+                  </div>
+
+                  {/* Language and Voice Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Language</label>
+                      <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {languages.map((lang) => (
+                            <SelectItem key={lang.code} value={lang.code}>
+                              {lang.name} ({lang.voiceCount} voices)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Voice</label>
+                      <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select voice" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {voices.map((voice) => (
+                            <SelectItem key={voice.id} value={voice.id}>
+                              {voice.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Audio Controls */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Speed: {speed[0]}x
+                      </label>
+                      <Slider
+                        value={speed}
+                        onValueChange={setSpeed}
+                        max={2}
+                        min={0.1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Pitch: {pitch[0]}x
+                      </label>
+                      <Slider
+                        value={pitch}
+                        onValueChange={setPitch}
+                        max={2}
+                        min={0}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Volume: {volume[0]}
+                      </label>
+                      <Slider
+                        value={volume}
+                        onValueChange={setVolume}
+                        max={1}
+                        min={0}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-4 justify-center">
+                    <Button 
+                      onClick={generateSpeech} 
+                      disabled={loading || !text.trim()}
+                      size="lg"
+                    >
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <Mic className="mr-2 h-4 w-4" />
+                      Generate Speech
                     </Button>
                     
-                    <Button variant="outline" onClick={downloadAudio} size="lg">
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </Button>
-                  </>
-                )}
-              </div>
+                    {audioUrl && (
+                      <>
+                        <Button variant="outline" onClick={playAudio} size="lg">
+                          {isPlaying ? <Square className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                          {isPlaying ? 'Stop' : 'Play'}
+                        </Button>
+                        
+                        <Button variant="outline" onClick={downloadAudio} size="lg">
+                          <Download className="mr-2 h-4 w-4" />
+                          Download
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Audio Player */}
+                  {audioUrl && (
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <h3 className="font-medium mb-3">Generated Audio</h3>
+                      <audio 
+                        ref={audioRef}
+                        controls 
+                        className="w-full"
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        onEnded={() => setIsPlaying(false)}
+                      >
+                        <source src={audioUrl} type="audio/wav" />
+                        Your browser does not support the audio element.
+                      </audio>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
 
               {/* Status Messages */}
               {error && (
@@ -498,31 +792,13 @@ export default function TTSPage() {
                 </Alert>
               )}
 
-              {/* Audio Player */}
-              {audioUrl && (
-                <div className="border rounded-lg p-4 bg-gray-50">
-                  <h3 className="font-medium mb-3">Generated Audio</h3>
-                  <audio 
-                    ref={audioRef}
-                    controls 
-                    className="w-full"
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onEnded={() => setIsPlaying(false)}
-                  >
-                    <source src={audioUrl} type="audio/wav" />
-                    Your browser does not support the audio element.
-                  </audio>
-                </div>
-              )}
-
               {/* Info Note */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-medium text-yellow-800 mb-2">🚀 Gemini 2.5 Flash Preview TTS</h3>
+                <h3 className="font-medium text-yellow-800 mb-2">🚀 Gemini 2.5 Flash Preview</h3>
                 <div className="text-sm text-yellow-700 space-y-1">
-                  <p><strong>Latest AI Voices:</strong> Experience state-of-the-art AI voices including Puck, Charon, Kore, Fenrir, and Aoede</p>
-                  <p><strong>Pricing Plans:</strong> Free (1,000 chars), Starter (₹499), Pro (₹1,499), Enterprise (₹4,999)</p>
-                  <p><strong>Features:</strong> Ultra-fast generation, enhanced natural speech, improved emotional expression</p>
+                  <p><strong>AI Script Generation:</strong> Create engaging scripts for any purpose with advanced AI</p>
+                  <p><strong>Latest AI Voices:</strong> Experience state-of-the-art voices including Puck, Charon, Kore, Fenrir, and Aoede</p>
+                  <p><strong>Pricing Plans:</strong> Free (1,000 chars), Starter (₹199), Pro (₹499), Enterprise (₹1,999)</p>
                   {!isAuthenticated ? (
                     <Button 
                       variant="link" 
@@ -544,10 +820,10 @@ export default function TTSPage() {
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
                   <div className="text-center">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      🎉 Free Trial: Try advanced voices with full controls!
+                      🎉 Free Trial: AI Script Generator + Premium Voices!
                     </h3>
                     <p className="text-gray-600 mb-4">
-                      Sign up for unlimited access to premium voices, advanced controls, and download features!
+                      Sign up for unlimited access to AI script generation, premium voices, and download features!
                     </p>
                     <div className="space-x-4">
                       <Button
@@ -558,9 +834,9 @@ export default function TTSPage() {
                       </Button>
                     </div>
                     <p className="text-sm text-gray-500 mt-4">
-                      Experience the latest in AI voice technology with premium features.<br/>
-                      Start free, upgrade when you need more.<br/>
-                      Join thousands of users creating amazing voice content with Gemini TTS.
+                      Create professional scripts with AI and convert them to speech.<br/>
+                      Perfect for content creators, marketers, and businesses.<br/>
+                      Join thousands of users creating amazing content with Gemini AI.
                     </p>
                   </div>
                 </div>

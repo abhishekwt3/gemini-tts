@@ -4,6 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+const { generateScript } = require('./services/scriptService');
+
 
 const { initializeDatabase, testConnection } = require('./config/database');
 const { setupAssociations } = require('./models');

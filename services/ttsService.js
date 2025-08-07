@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
-const { GEMINI_25_VOICES } = require('../config/constants');
+const { GEMINI_25_VOICES, GOOGLE_CHIRP3_VOICES } = require('../config/constants');
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -41,7 +41,7 @@ function convertPCMToWAV(pcmData, sampleRate = 24000, numChannels = 1, bitsPerSa
   return Buffer.concat([header, pcmData]);
 }
 
-const generateSpeech = async (genAI, params) => {
+const generateSpeechGemini = async (genAI, params) => {
   const { text, voiceId, languageCode, speed = 1.0, pitch = 0.0, style = '' } = params;
 
   // Find the voice configuration
@@ -53,7 +53,7 @@ const generateSpeech = async (genAI, params) => {
     throw new Error('Invalid voice selection');
   }
 
-  console.log(`🎙️ Generating speech for: "${text.substring(0, 50)}..." using voice: ${selectedVoice.name}`);
+  console.log(`🎙️ Generating speech with Gemini 2.5: "${text.substring(0, 50)}..." using voice: ${selectedVoice.name}`);
 
   // Prepare the text with style instructions if provided
   let promptText = text;
@@ -79,8 +79,6 @@ const generateSpeech = async (genAI, params) => {
     }
   };
 
-  console.log('🔄 Calling Gemini 2.5 Flash Preview TTS API...');
-
   // Generate speech using the Gemini API
   const response = await genAI.models.generateContent(request);
   
@@ -97,27 +95,138 @@ const generateSpeech = async (genAI, params) => {
   // Convert PCM to WAV format
   const wavBuffer = convertPCMToWAV(audioBuffer, 24000, 1, 16);
   
+  return {
+    audioBuffer: wavBuffer,
+    voice: selectedVoice,
+    languageCode,
+    provider: 'gemini'
+  };
+};
+
+const generateSpeechGoogle = async (googleTTS, params) => {
+  const { text, voiceId, languageCode, speed = 1.0, pitch = 0.0 } = params;
+
+  // Find the voice configuration
+  const voices = GOOGLE_CHIRP3_VOICES[languageCode] || [];
+  const voiceIndex = parseInt(voiceId.split('-').pop());
+  const selectedVoice = voices[voiceIndex];
+
+  if (!selectedVoice) {
+    throw new Error('Invalid voice selection');
+  }
+
+  console.log(`🎙️ Generating speech with Google Chirp3: "${text.substring(0, 50)}..." using voice: ${selectedVoice.name}`);
+
+  const request = {
+    input: { text: text },
+    voice: {
+      languageCode: languageCode,
+      name: selectedVoice.name
+    },
+    audioConfig: {
+      audioEncoding: 'MP3',
+      speakingRate: speed,
+      pitch: pitch * 4, // Google uses -20 to 20 range
+      effectsProfileId: ['headphone-class-device']
+    }
+  };
+
+  const [response] = await googleTTS.synthesizeSpeech(request);
+  
+  return {
+    audioBuffer: response.audioContent,
+    voice: selectedVoice,
+    languageCode,
+    provider: 'google'
+  };
+};
+
+const generateSpeech = async (services, params) => {
+  const { text, voiceId, languageCode, speed, pitch, style, preferredProvider = 'auto' } = params;
+  
+  let audioBuffer, voice, provider;
+  
+  // Determine which provider to use
+  const isGeminiVoice = voiceId.includes('gemini-');
+  const isGoogleVoice = voiceId.includes('google-');
+  
+  try {
+    if (preferredProvider === 'google' || isGoogleVoice) {
+      // Use Google TTS
+      if (!services.googleTTS) {
+        throw new Error('Google TTS not available, falling back to Gemini');
+      }
+      const result = await generateSpeechGoogle(services.googleTTS, params);
+      audioBuffer = result.audioBuffer;
+      voice = result.voice;
+      provider = 'google';
+    } else if (preferredProvider === 'gemini' || isGeminiVoice) {
+      // Use Gemini TTS
+      if (!services.genAI) {
+        throw new Error('Gemini TTS not available, falling back to Google');
+      }
+      const result = await generateSpeechGemini(services.genAI, params);
+      audioBuffer = result.audioBuffer;
+      voice = result.voice;
+      provider = 'gemini';
+    } else {
+      // Auto-select: prefer Google for quota efficiency, fallback to Gemini
+      if (services.googleTTS && GOOGLE_CHIRP3_VOICES[languageCode]) {
+        const result = await generateSpeechGoogle(services.googleTTS, params);
+        audioBuffer = result.audioBuffer;
+        voice = result.voice;
+        provider = 'google';
+      } else if (services.genAI) {
+        const result = await generateSpeechGemini(services.genAI, params);
+        audioBuffer = result.audioBuffer;
+        voice = result.voice;
+        provider = 'gemini';
+      } else {
+        throw new Error('No TTS services available');
+      }
+    }
+  } catch (error) {
+    console.log(`Primary provider failed: ${error.message}, trying fallback...`);
+    
+    // Fallback logic
+    if (provider !== 'google' && services.googleTTS && GOOGLE_CHIRP3_VOICES[languageCode]) {
+      const result = await generateSpeechGoogle(services.googleTTS, params);
+      audioBuffer = result.audioBuffer;
+      voice = result.voice;
+      provider = 'google';
+    } else if (provider !== 'gemini' && services.genAI) {
+      const result = await generateSpeechGemini(services.genAI, params);
+      audioBuffer = result.audioBuffer;
+      voice = result.voice;
+      provider = 'gemini';
+    } else {
+      throw error;
+    }
+  }
+  
   // Generate unique filename
   const audioId = uuidv4();
-  const filename = `gemini25-tts-${audioId}.wav`;
+  const extension = provider === 'google' ? 'mp3' : 'wav';
+  const filename = `tts-${provider}-${audioId}.${extension}`;
   const filepath = path.join(uploadsDir, filename);
   
   // Save audio file
-  await fs.writeFile(filepath, wavBuffer);
+  await fs.writeFile(filepath, audioBuffer);
   
-  console.log(`✅ Gemini 2.5 Flash Preview audio generated successfully: ${filename}`);
+  console.log(`✅ Audio generated successfully with ${provider}: ${filename}`);
   
   return {
     audioId,
     filename,
-    voice: selectedVoice,
+    voice,
     languageCode,
+    provider,
     charactersUsed: text.length
   };
 };
 
 const checkVoiceAccess = (userPlan, voiceName) => {
-  if (!userPlan) return { allowed: true, voices: ['Puck', 'Kore'] };
+  if (!userPlan) return { allowed: true, voices: ['Puck', 'Kore', 'en-US-Journey-F'] };
   
   const allowedVoices = userPlan.limits.voices;
   
