@@ -10,10 +10,15 @@ const createPaymentOrder = async (razorpay, userId, userEmail, planId) => {
     throw new Error('Invalid plan selected');
   }
 
+  // Create short receipt ID (max 40 chars for Razorpay)
+  const shortUserId = userId.substring(0, 8); // First 8 chars of UUID
+  const timestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
+  const receipt = `rcpt_${shortUserId}_${timestamp}`; // Format: rcpt_12345678_87654321 (max 25 chars)
+
   const options = {
     amount: plan.price * 100, // Amount in paise
     currency: plan.currency,
-    receipt: `receipt_${userId}_${Date.now()}`,
+    receipt: receipt,
     payment_capture: 1,
     notes: {
       planId: plan.id,
@@ -33,7 +38,8 @@ const createPaymentOrder = async (razorpay, userId, userEmail, planId) => {
     status: 'pending',
     plan: planId,
     metadata: {
-      razorpayOrderData: order
+      razorpayOrderData: order,
+      shortReceipt: receipt
     }
   });
   

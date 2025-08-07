@@ -1,4 +1,4 @@
-// routes/user.js - User dashboard and management routes
+// routes/user.js - Fixed dashboard route
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
@@ -10,10 +10,12 @@ const {
 } = require('../services/userService');
 
 // Get user dashboard data
-router.get('/dashboard', authenticateToken, (req, res) => {
+router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = getUserById(userId);
+    
+    // Get user data from database to ensure we have all fields
+    const user = await getUserById(userId);
     
     if (!user) {
       return res.status(404).json({
@@ -22,17 +24,17 @@ router.get('/dashboard', authenticateToken, (req, res) => {
       });
     }
     
-    const userSub = getUserSubscription(userId) || { plan: 'free', status: 'active' };
+    const userSub = await getUserSubscription(userId) || { plan: 'free', status: 'active' };
     const plan = PRICING_PLANS[userSub.plan];
-    const usage = getUserUsage(userId);
+    const usage = await getUserUsage(userId);
 
     res.json({
       success: true,
       dashboard: {
         user: {
           id: userId,
-          email: req.user.email,
-          name: req.user.name
+          email: user.email,
+          name: user.name // Use name from database
         },
         subscription: {
           plan: userSub.plan,
@@ -64,5 +66,3 @@ router.get('/dashboard', authenticateToken, (req, res) => {
 });
 
 module.exports = router;
-
-
