@@ -22,7 +22,7 @@ const PRICING_PLANS = {
   starter: {
     id: 'starter',
     name: 'Starter Plan',
-    price: 499,
+    price: 199,
     currency: 'INR',
     interval: 'month',
     features: [
@@ -42,7 +42,7 @@ const PRICING_PLANS = {
   pro: {
     id: 'pro',
     name: 'Pro Plan',
-    price: 1499,
+    price: 499,
     currency: 'INR',
     interval: 'month',
     features: [
@@ -64,11 +64,11 @@ const PRICING_PLANS = {
   enterprise: {
     id: 'enterprise',
     name: 'Enterprise Plan',
-    price: 4999,
+    price: 1999,
     currency: 'INR',
     interval: 'month',
     features: [
-      'Unlimited characters',
+      '500,000 characters',
       'All voices + custom voices',
       'Ultra-high quality audio',
       'Advanced style control',
@@ -78,9 +78,9 @@ const PRICING_PLANS = {
       'Dedicated account manager'
     ],
     limits: {
-      monthlyCharacters: -1, // Unlimited
+      monthlyCharacters: 500000, // Unlimited
       voices: 'all',
-      apiCalls: -1 // Unlimited
+      apiCalls: 5000 // Unlimited
     },
     popular: false
   }
