@@ -48,7 +48,7 @@ interface UserDashboard {
     charactersRemaining: string | number
   }
   features: string[]
-  availableVoices: string[]
+  availableVoices: string[] | string
 }
 
 // Extend Window interface for Razorpay
@@ -142,13 +142,22 @@ export default function PricingPage() {
       
       const data = await response.json()
       
-      if (data.success) {
-        setDashboardData(data.dashboard)
+      if (data.success && data.dashboard) {
+        // Validate dashboard data before setting
+        const dashboard = data.dashboard
+        if (dashboard.user && dashboard.subscription && dashboard.usage) {
+          setDashboardData(dashboard)
+        } else {
+          console.error('Invalid dashboard data structure:', dashboard)
+          setError('Invalid dashboard data received')
+        }
       } else {
         console.error('Failed to load dashboard:', data.error)
+        setError('Failed to load dashboard data')
       }
     } catch (error) {
       console.error('Dashboard error:', error)
+      setError('Error loading dashboard')
     }
   }
 
@@ -164,7 +173,10 @@ export default function PricingPage() {
     }
     
     const plan = pricingPlans.find(p => p.id === planId)
-    if (!plan) return
+    if (!plan) {
+      setError('Plan not found')
+      return
+    }
     
     if (plan.price === 0) {
       setError('Free plan is automatically assigned. Contact support to downgrade from paid plans.')
@@ -172,7 +184,7 @@ export default function PricingPage() {
     }
 
     // Check if user already has this plan
-    if (dashboardData?.subscription.plan === planId) {
+    if (dashboardData?.subscription?.plan === planId) {
       setError('You already have this plan')
       return
     }
@@ -191,7 +203,8 @@ export default function PricingPage() {
       })
       
       if (!orderResponse.ok) {
-        throw new Error(`HTTP ${orderResponse.status}`)
+        const errorData = await orderResponse.json()
+        throw new Error(errorData.error || `HTTP ${orderResponse.status}`)
       }
 
       const orderData = await orderResponse.json()
@@ -262,19 +275,19 @@ export default function PricingPage() {
       
       if (verifyData.success) {
         setSuccess('🎉 Payment successful! Your subscription has been activated.')
+        setPaymentLoading('')
         
-        // Reload dashboard data
+        // Reload dashboard data after a short delay to ensure DB is updated
         setTimeout(async () => {
           await loadUserDashboard()
           setActiveTab('dashboard')
-        }, 2000)
+        }, 3000) // Increased delay to ensure database update is complete
       } else {
         throw new Error(verifyData.error || 'Payment verification failed')
       }
     } catch (error: any) {
       console.error('Verification error:', error)
       setError(error.message || 'Payment verification failed')
-    } finally {
       setPaymentLoading('')
     }
   }
@@ -294,7 +307,21 @@ export default function PricingPage() {
   }
 
   const isCurrentPlan = (planId: string) => {
-    return dashboardData?.subscription.plan === planId
+    return dashboardData?.subscription?.plan === planId
+  }
+
+  // Safe access helpers
+  const getDashboardValue = (path: string, fallback: any = 'N/A') => {
+    const keys = path.split('.')
+    let value = dashboardData
+    for (const key of keys) {
+      if (value && typeof value === 'object' && key in value) {
+        value = (value as any)[key]
+      } else {
+        return fallback
+      }
+    }
+    return value ?? fallback
   }
 
   if (loading) {
@@ -528,20 +555,20 @@ export default function PricingPage() {
                       <CardContent className="space-y-3">
                         <div>
                           <label className="text-sm font-medium text-gray-500">Name</label>
-                          <p className="text-sm font-medium">{dashboardData.user.name}</p>
+                          <p className="text-sm font-medium">{getDashboardValue('user.name', 'User')}</p>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-500">Email</label>
-                          <p className="text-sm">{dashboardData.user.email}</p>
+                          <p className="text-sm">{getDashboardValue('user.email', 'N/A')}</p>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-500">Current Plan</label>
                           <div className="flex items-center space-x-2">
                             <Badge variant="outline" className="capitalize">
-                              {dashboardData.subscription.planName}
+                              {getDashboardValue('subscription.planName', 'Free')}
                             </Badge>
                             <span className="text-xs text-green-600">
-                              {dashboardData.subscription.status}
+                              {getDashboardValue('subscription.status', 'active')}
                             </span>
                           </div>
                         </div>
@@ -560,17 +587,17 @@ export default function PricingPage() {
                           <div className="flex justify-between text-sm mb-1">
                             <span>Characters Used</span>
                             <span>
-                              {dashboardData.usage.monthlyCharacters.toLocaleString()}/
-                              {dashboardData.usage.monthlyCharactersLimit === -1 
+                              {getDashboardValue('usage.monthlyCharacters', 0).toLocaleString()}/
+                              {getDashboardValue('usage.monthlyCharactersLimit', 0) === -1 
                                 ? '∞' 
-                                : dashboardData.usage.monthlyCharactersLimit.toLocaleString()
+                                : getDashboardValue('usage.monthlyCharactersLimit', 0).toLocaleString()
                               }
                             </span>
                           </div>
                           <Progress 
                             value={getUsagePercentage(
-                              dashboardData.usage.monthlyCharacters,
-                              dashboardData.usage.monthlyCharactersLimit
+                              getDashboardValue('usage.monthlyCharacters', 0),
+                              getDashboardValue('usage.monthlyCharactersLimit', 0)
                             )} 
                             className="h-2"
                           />
@@ -580,17 +607,17 @@ export default function PricingPage() {
                           <div className="flex justify-between text-sm mb-1">
                             <span>API Calls</span>
                             <span>
-                              {dashboardData.usage.apiCalls.toLocaleString()}/
-                              {dashboardData.usage.apiCallsLimit === -1 
+                              {getDashboardValue('usage.apiCalls', 0).toLocaleString()}/
+                              {getDashboardValue('usage.apiCallsLimit', 0) === -1 
                                 ? '∞' 
-                                : dashboardData.usage.apiCallsLimit.toLocaleString()
+                                : getDashboardValue('usage.apiCallsLimit', 0).toLocaleString()
                               }
                             </span>
                           </div>
                           <Progress 
                             value={getUsagePercentage(
-                              dashboardData.usage.apiCalls,
-                              dashboardData.usage.apiCallsLimit
+                              getDashboardValue('usage.apiCalls', 0),
+                              getDashboardValue('usage.apiCallsLimit', 0)
                             )} 
                             className="h-2"
                           />
@@ -618,7 +645,10 @@ export default function PricingPage() {
                         >
                           View All Plans
                         </Button>
-                        {getUsagePercentage(dashboardData.usage.monthlyCharacters, dashboardData.usage.monthlyCharactersLimit) > 80 && (
+                        {getUsagePercentage(
+                          getDashboardValue('usage.monthlyCharacters', 0), 
+                          getDashboardValue('usage.monthlyCharactersLimit', 0)
+                        ) > 80 && (
                           <Button 
                             variant="outline" 
                             className="w-full border-orange-500 text-orange-600 hover:bg-orange-50"
@@ -636,11 +666,11 @@ export default function PricingPage() {
                     <CardHeader>
                       <CardTitle>Available Voices</CardTitle>
                       <CardDescription>
-                        Voices included in your {dashboardData.subscription.planName} plan
+                        Voices included in your {getDashboardValue('subscription.planName', 'Free')} plan
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {dashboardData.availableVoices === 'all' ? (
+                      {getDashboardValue('availableVoices') === 'all' ? (
                         <div className="text-center p-8">
                           <Crown className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
                           <h3 className="text-lg font-medium mb-2">All Premium Voices</h3>
@@ -648,9 +678,9 @@ export default function PricingPage() {
                             Your Enterprise plan includes access to all premium voices including custom voices and future releases.
                           </p>
                         </div>
-                      ) : Array.isArray(dashboardData.availableVoices) ? (
+                      ) : Array.isArray(getDashboardValue('availableVoices')) ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {dashboardData.availableVoices.map((voice, index) => (
+                          {(getDashboardValue('availableVoices', []) as string[]).map((voice, index) => (
                             <div key={index} className="flex items-center p-2 bg-gray-50 rounded-md">
                               <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
                               <span className="text-sm font-medium">{voice}</span>
@@ -659,7 +689,7 @@ export default function PricingPage() {
                         </div>
                       ) : (
                         <div className="text-center p-4">
-                          <p className="text-gray-500">No voice information available</p>
+                          <p className="text-gray-500">Loading voice information...</p>
                         </div>
                       )}
                     </CardContent>

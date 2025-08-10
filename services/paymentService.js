@@ -1,7 +1,8 @@
 const crypto = require('crypto');
 const { PRICING_PLANS } = require('../config/constants');
-const { Payment, Subscription, User } = require('../models');
+const { Payment, Subscription, User, Usage } = require('../models');
 const { sequelize } = require('../config/database');
+const { Op } = require('sequelize');
 
 const createPaymentOrder = async (razorpay, userId, userEmail, planId) => {
   const plan = PRICING_PLANS[planId];
@@ -66,12 +67,14 @@ const activateSubscription = async (userId, planId, paymentId, orderId) => {
   const plan = PRICING_PLANS[planId];
   
   if (!plan) {
-    throw new Error('Invalid plan');
+    throw new Error(`Invalid plan: ${planId}`);
   }
 
   const transaction = await sequelize.transaction();
   
   try {
+    console.log(`Activating subscription for user ${userId}, plan ${planId}`);
+    
     // Update payment record
     const payment = await Payment.findOne({
       where: { orderId },
@@ -86,8 +89,10 @@ const activateSubscription = async (userId, planId, paymentId, orderId) => {
     payment.status = 'completed';
     await payment.save({ transaction });
 
+    console.log('Payment record updated');
+
     // Cancel existing active subscriptions
-    await Subscription.update(
+    const cancelledCount = await Subscription.update(
       { 
         status: 'cancelled', 
         cancelledAt: new Date() 
@@ -97,6 +102,8 @@ const activateSubscription = async (userId, planId, paymentId, orderId) => {
         transaction 
       }
     );
+
+    console.log(`Cancelled ${cancelledCount[0]} existing subscriptions`);
 
     // Create new subscription
     const subscription = await Subscription.create({
@@ -111,12 +118,14 @@ const activateSubscription = async (userId, planId, paymentId, orderId) => {
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
     }, { transaction });
 
+    console.log('New subscription created:', subscription.id);
+
     // Update payment with subscription ID
     payment.subscriptionId = subscription.id;
     await payment.save({ transaction });
 
     // Update user's plan
-    await User.update(
+    const userUpdateResult = await User.update(
       { plan: planId },
       { 
         where: { id: userId },
@@ -124,18 +133,34 @@ const activateSubscription = async (userId, planId, paymentId, orderId) => {
       }
     );
 
+    console.log(`User plan updated, affected rows: ${userUpdateResult[0]}`);
+
     // Reset usage for new subscription
     const monthYear = new Date().toISOString().slice(0, 7);
-    const Usage = require('../models/Usage');
-    await Usage.update(
-      { charactersUsed: 0, apiCalls: 0 },
-      { 
-        where: { userId, monthYear },
-        transaction 
-      }
-    );
+    
+    // Find or create usage record for current month
+    const [usage, created] = await Usage.findOrCreate({
+      where: { userId, monthYear },
+      defaults: {
+        charactersUsed: 0,
+        apiCalls: 0,
+        audioGenerated: 0
+      },
+      transaction
+    });
+
+    if (!created) {
+      // Reset existing usage
+      await usage.update({
+        charactersUsed: 0,
+        apiCalls: 0
+      }, { transaction });
+    }
+
+    console.log('Usage reset for new subscription');
 
     await transaction.commit();
+    console.log('Transaction committed successfully');
 
     return {
       subscription,
@@ -144,7 +169,7 @@ const activateSubscription = async (userId, planId, paymentId, orderId) => {
   } catch (error) {
     await transaction.rollback();
     console.error('Error activating subscription:', error);
-    throw error;
+    throw new Error(`Failed to activate subscription: ${error.message}`);
   }
 };
 
@@ -173,9 +198,10 @@ const getSubscriptionStatus = async (userId) => {
       where: { 
         userId,
         status: 'active',
-        expiresAt: {
-          [Op.gt]: new Date()
-        }
+        [Op.or]: [
+          { expiresAt: null },
+          { expiresAt: { [Op.gt]: new Date() } }
+        ]
       },
       order: [['createdAt', 'DESC']]
     });

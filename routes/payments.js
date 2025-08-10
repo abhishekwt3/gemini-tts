@@ -20,6 +20,13 @@ router.post('/create-order', authenticateToken, async (req, res) => {
       });
     }
 
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Plan ID is required'
+      });
+    }
+
     const order = await createPaymentOrder(
       razorpay, 
       req.user.id, 
@@ -52,10 +59,24 @@ router.post('/verify', authenticateToken, async (req, res) => {
       planId 
     } = req.body;
 
+    console.log('Payment verification started:', {
+      userId: req.user.id,
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      planId
+    });
+
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
         success: false,
         error: 'Missing payment verification data'
+      });
+    }
+
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Plan ID is required'
       });
     }
 
@@ -68,28 +89,38 @@ router.post('/verify', authenticateToken, async (req, res) => {
     );
 
     if (!isValid) {
+      console.error('Invalid payment signature for order:', razorpay_order_id);
       return res.status(400).json({
         success: false,
         error: 'Invalid payment signature'
       });
     }
 
+    console.log('Payment signature verified successfully');
+
     // Activate subscription
-    const { subscription, plan } = activateSubscription(
+    const result = await activateSubscription(
       req.user.id, 
       planId, 
       razorpay_payment_id, 
       razorpay_order_id
     );
 
+    console.log('Subscription activated successfully:', {
+      userId: req.user.id,
+      subscriptionId: result.subscription.id,
+      plan: planId
+    });
+
     res.json({
       success: true,
       message: 'Payment verified and subscription activated',
       subscription: {
+        id: result.subscription.id,
         plan: planId,
-        planName: plan.name,
+        planName: result.plan.name,
         status: 'active',
-        expiresAt: subscription.expiresAt
+        expiresAt: result.subscription.expiresAt
       }
     });
 
@@ -98,6 +129,34 @@ router.post('/verify', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to verify payment'
+    });
+  }
+});
+
+// Get payment history (optional endpoint for future use)
+router.get('/history', authenticateToken, async (req, res) => {
+  try {
+    const { getPaymentHistory } = require('../services/paymentService');
+    const payments = await getPaymentHistory(req.user.id, 20);
+    
+    res.json({
+      success: true,
+      payments: payments.map(payment => ({
+        id: payment.id,
+        orderId: payment.orderId,
+        paymentId: payment.paymentId,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.status,
+        plan: payment.plan,
+        createdAt: payment.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Payment history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get payment history'
     });
   }
 });

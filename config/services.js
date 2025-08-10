@@ -1,6 +1,5 @@
 const Razorpay = require('razorpay');
 const { GoogleGenAI } = require('@google/genai');
-const textToSpeech = require('@google-cloud/text-to-speech');
 
 function initializeServices() {
   const services = {
@@ -22,49 +21,31 @@ function initializeServices() {
     console.error('❌ Failed to initialize Razorpay:', error.message);
   }
 
-  // Initialize Google GenAI (Gemini)
+  // Initialize Google GenAI (for Gemini voices)
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      services.genAI = new GoogleGenAI({ apiKey });
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (geminiApiKey) {
+      services.genAI = new GoogleGenAI({ apiKey: geminiApiKey });
       console.log('✅ Google GenAI Gemini 2.5 Flash Preview TTS initialized');
     } else {
-      console.log('💡 GEMINI_API_KEY not set');
+      console.log('💡 GEMINI_API_KEY not set - Gemini voices will be unavailable');
     }
   } catch (error) {
     console.error('❌ Failed to initialize Google GenAI:', error.message);
   }
 
-  // Initialize Google Cloud Text-to-Speech
+  // Initialize Google Text-to-Speech (for Chirp3 HD voices)
   try {
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT_ID) {
-      const config = {};
-      
-      // If using service account key file
-      if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        config.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      }
-      
-      // If using project ID and other auth methods
-      if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
-        config.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-      }
-
-      // If using service account key as JSON string
-      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-        const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-        config.credentials = credentials;
-        config.projectId = credentials.project_id;
-      }
-
-      services.googleTTS = new textToSpeech.TextToSpeechClient(config);
-      console.log('✅ Google Cloud Text-to-Speech (Chirp3 HD) initialized');
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_TTS_API_KEY) {
+      // Google TTS is initialized in ttsService.js to avoid circular dependencies
+      console.log('✅ Google Text-to-Speech credentials configured');
+      services.googleTTS = true;
     } else {
-      console.log('💡 Google Cloud credentials not configured');
-      console.log('   Set GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_SERVICE_ACCOUNT_KEY');
+      console.log('💡 Google TTS credentials not set - Chirp3 HD voices will be unavailable');
+      console.log('   Set GOOGLE_APPLICATION_CREDENTIALS or configure service account');
     }
   } catch (error) {
-    console.error('❌ Failed to initialize Google TTS:', error.message);
+    console.error('❌ Failed to check Google TTS configuration:', error.message);
   }
 
   return services;

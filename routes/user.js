@@ -1,4 +1,4 @@
-// routes/user.js - Fixed dashboard route
+// routes/user.js - Fixed dashboard route with better error handling
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
@@ -25,31 +25,42 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     }
     
     const userSub = await getUserSubscription(userId) || { plan: 'free', status: 'active' };
-    const plan = PRICING_PLANS[userSub.plan];
+    
+    // Ensure we have a valid plan, fallback to free if not found
+    let planKey = userSub.plan;
+    if (!PRICING_PLANS[planKey]) {
+      console.warn(`Invalid plan '${planKey}' for user ${userId}, falling back to free`);
+      planKey = 'free';
+    }
+    
+    const plan = PRICING_PLANS[planKey];
     const usage = await getUserUsage(userId);
+
+    // Ensure we have all required user fields
+    const userData = {
+      id: userId,
+      email: user.email,
+      name: user.name || user.email.split('@')[0] // Fallback to email prefix if name is missing
+    };
 
     res.json({
       success: true,
       dashboard: {
-        user: {
-          id: userId,
-          email: user.email,
-          name: user.name // Use name from database
-        },
+        user: userData,
         subscription: {
-          plan: userSub.plan,
+          plan: planKey,
           planName: plan.name,
-          status: userSub.status,
+          status: userSub.status || 'active',
           expiresAt: userSub.expiresAt
         },
         usage: {
-          monthlyCharacters: usage.monthlyCharacters,
+          monthlyCharacters: usage.monthlyCharacters || 0,
           monthlyCharactersLimit: plan.limits.monthlyCharacters,
-          apiCalls: usage.apiCalls,
+          apiCalls: usage.apiCalls || 0,
           apiCallsLimit: plan.limits.apiCalls,
           charactersRemaining: plan.limits.monthlyCharacters === -1 ? 
             'Unlimited' : 
-            Math.max(0, plan.limits.monthlyCharacters - usage.monthlyCharacters)
+            Math.max(0, plan.limits.monthlyCharacters - (usage.monthlyCharacters || 0))
         },
         features: plan.features,
         availableVoices: plan.limits.voices
