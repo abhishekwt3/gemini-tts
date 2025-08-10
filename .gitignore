@@ -50,3 +50,4 @@ temp/
 /tts-frontend/.next/
 /tts-frontend/node_modules/
 
+gcs-service-account.json
