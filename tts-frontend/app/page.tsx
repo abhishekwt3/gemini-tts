@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
-import { Play, Download, Square, Mic, User, LogOut, AlertCircle, CheckCircle, Loader2, FileText, Youtube, Megaphone, Package, Video, Copy, Sparkles } from 'lucide-react'
+import { Play, Download, Square, Mic, User, LogOut, AlertCircle, CheckCircle, Loader2, FileText, Youtube, Megaphone, Package, Video, Copy, Sparkles, Zap, Star, Crown } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from './contexts/AuthContext'
 import Navigation from './components/Navigation'
@@ -420,71 +420,78 @@ export default function TTSPage() {
     <>
       <Navigation />
       
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          
           {/* User Status Widget */}
           {userStatus?.authenticated && (
-            <Card className="mb-6">
-              <CardContent className="pt-6">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <p className="text-sm font-medium">Welcome, {userStatus.user.name}!</p>
-                      <p className="text-xs text-gray-500">Plan: {userStatus.planName}</p>
+            <Card className="mb-6 border-blue-200 bg-blue-50/50">
+              <CardContent className="pt-4 sm:pt-6">
+                <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-full">
+                      <User className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-gray-600">
-                        {userStatus.usage.monthlyCharacters} / {userStatus.usage.monthlyCharactersLimit === -1 ? '∞' : userStatus.usage.monthlyCharactersLimit} chars
-                      </span>
-                      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Welcome, {userStatus.user.name}!</p>
+                      <p className="text-xs text-gray-600">
+                        {userStatus.planName} Plan • {userStatus.usage.monthlyCharacters} / {userStatus.usage.monthlyCharactersLimit === -1 ? '∞' : userStatus.usage.monthlyCharactersLimit} chars used
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <div className="flex-1 min-w-[100px] sm:min-w-[120px]">
+                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-blue-600 transition-all duration-300"
                           style={{ width: `${getUsagePercentage()}%` }}
                         />
                       </div>
                     </div>
+                    <Link href="/pricing">
+                      <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+                        {getUsagePercentage() > 80 ? 'Upgrade' : 'Manage'}
+                      </Button>
+                    </Link>
                   </div>
-                  <Link href="/pricing">
-                    <Button variant="outline" size="sm">
-                      {getUsagePercentage() > 80 ? 'Upgrade Plan' : 'Manage Plan'}
-                    </Button>
-                  </Link>
                 </div>
               </CardContent>
             </Card>
           )}
 
           {/* Main Interface with Tabs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Sparkles className="h-5 w-5 mr-2" />
+          <Card className="shadow-xl border-0 bg-white/90 backdrop-blur-sm">
+            <CardHeader className="text-center pb-4 sm:pb-6">
+              <CardTitle className="flex items-center justify-center text-xl sm:text-2xl mb-2 sm:mb-3">
+                <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-blue-600" />
                 Gemini AI Content Generator
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm sm:text-base text-gray-600">
                 Generate scripts and convert them to natural-sounding speech using Gemini 2.5 Flash Preview
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="script" className="flex items-center">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Script Generator
+            <CardContent className="px-4 sm:px-6">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+                <TabsList className="grid w-full grid-cols-2 h-12">
+                  <TabsTrigger value="script" className="flex items-center text-xs sm:text-sm">
+                    <FileText className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Script Generator</span>
+                    <span className="sm:hidden">Script</span>
                   </TabsTrigger>
-                  <TabsTrigger value="tts" className="flex items-center">
-                    <Mic className="h-4 w-4 mr-2" />
-                    TTS Generator
+                  <TabsTrigger value="tts" className="flex items-center text-xs sm:text-sm">
+                    <Mic className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">TTS Generator</span>
+                    <span className="sm:hidden">Voice</span>
                   </TabsTrigger>
                 </TabsList>
 
                 {/* Script Generator Tab */}
-                <TabsContent value="script" className="space-y-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <TabsContent value="script" className="space-y-4 sm:space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                     {/* Input Section */}
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">
                           Topic / Idea / Details
                         </label>
                         <Textarea
@@ -492,15 +499,15 @@ export default function TTSPage() {
                           value={scriptTopic}
                           onChange={(e) => setScriptTopic(e.target.value)}
                           rows={4}
-                          className="resize-none"
+                          className="resize-none text-sm sm:text-base"
                         />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="text-sm font-medium mb-2 block">Script Type</label>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Script Type</label>
                           <Select value={scriptType} onValueChange={setScriptType}>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-11">
                               <SelectValue placeholder="Select script type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -517,9 +524,9 @@ export default function TTSPage() {
                         </div>
 
                         <div>
-                          <label className="text-sm font-medium mb-2 block">Script Style</label>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Script Style</label>
                           <Select value={scriptStyle} onValueChange={setScriptStyle}>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-11">
                               <SelectValue placeholder="Select style" />
                             </SelectTrigger>
                             <SelectContent>
@@ -534,20 +541,21 @@ export default function TTSPage() {
                       </div>
 
                       <div>
-                        <label className="text-sm font-medium mb-2 block">
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">
                           Target Duration (optional)
                         </label>
                         <Input
                           placeholder="e.g., 30 seconds, 2 minutes, 5 minutes"
                           value={scriptDuration}
                           onChange={(e) => setScriptDuration(e.target.value)}
+                          className="h-11"
                         />
                       </div>
 
                       {/* Quick Prompt Buttons */}
-                      <div className="border rounded-lg p-4 bg-gray-50">
-                        <h3 className="font-medium mb-3">Quick Script Ideas</h3>
-                        <div className="grid grid-cols-2 gap-2">
+                      <div className="border rounded-lg p-3 sm:p-4 bg-gray-50">
+                        <h3 className="font-semibold text-sm sm:text-base mb-3">Quick Script Ideas</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {SCRIPT_TYPES.map((type) => (
                             <Button
                               key={type.id}
@@ -557,12 +565,12 @@ export default function TTSPage() {
                                 setScriptType(type.id)
                                 setScriptTopic(`Create a ${type.description.toLowerCase()} about...`)
                               }}
-                              className="justify-start h-auto p-3"
+                              className="justify-start h-auto p-3 text-left"
                             >
-                              <type.icon className="h-4 w-4 mr-2" />
-                              <div className="text-left">
+                              <type.icon className="h-4 w-4 mr-2 flex-shrink-0" />
+                              <div>
                                 <div className="font-medium text-xs">{type.name}</div>
-                                <div className="text-xs text-gray-500">{type.description}</div>
+                                <div className="text-xs text-gray-500 hidden sm:block">{type.description}</div>
                               </div>
                             </Button>
                           ))}
@@ -572,7 +580,7 @@ export default function TTSPage() {
                       <Button 
                         onClick={generateScript} 
                         disabled={scriptLoading || !scriptTopic.trim()}
-                        className="w-full"
+                        className="w-full h-12"
                         size="lg"
                       >
                         {scriptLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -584,7 +592,7 @@ export default function TTSPage() {
                     {/* Output Section */}
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">
                           Generated Script
                         </label>
                         <div className="relative">
@@ -593,7 +601,7 @@ export default function TTSPage() {
                             value={generatedScript}
                             onChange={(e) => setGeneratedScript(e.target.value)}
                             rows={12}
-                            className="resize-none"
+                            className="resize-none text-sm sm:text-base"
                           />
                           {generatedScript && (
                             <div className="absolute top-2 right-2 flex gap-1">
@@ -611,10 +619,10 @@ export default function TTSPage() {
                       </div>
 
                       {generatedScript && (
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <Button
                             onClick={copyScriptToTTS}
-                            className="flex-1"
+                            className="flex-1 h-11"
                             variant="outline"
                           >
                             <Mic className="mr-2 h-4 w-4" />
@@ -624,8 +632,10 @@ export default function TTSPage() {
                             onClick={copyToClipboard}
                             variant="outline"
                             size="icon"
+                            className="h-11 w-11 sm:w-auto sm:px-3"
                           >
                             <Copy className="h-4 w-4" />
+                            <span className="hidden sm:inline ml-2">Copy</span>
                           </Button>
                         </div>
                       )}
@@ -634,28 +644,33 @@ export default function TTSPage() {
                 </TabsContent>
 
                 {/* TTS Generator Tab */}
-                <TabsContent value="tts" className="space-y-6">
+                <TabsContent value="tts" className="space-y-4 sm:space-y-6">
                   {/* Text Input */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      Text to Convert ({text.length}/5000 characters)
-                    </label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-semibold text-gray-700">
+                        Text to Convert
+                      </label>
+                      <span className="text-xs sm:text-sm text-gray-500">
+                        {text.length}/5000 characters
+                      </span>
+                    </div>
                     <Textarea
                       placeholder="Enter the text you want to convert to speech..."
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       rows={6}
                       maxLength={5000}
-                      className="resize-none"
+                      className="resize-none text-sm sm:text-base leading-relaxed"
                     />
                   </div>
 
                   {/* Language and Voice Selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Language</label>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Language</label>
                       <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-12">
                           <SelectValue placeholder="Select language" />
                         </SelectTrigger>
                         <SelectContent>
@@ -669,9 +684,9 @@ export default function TTSPage() {
                     </div>
                     
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Voice</label>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Voice</label>
                       <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-12">
                           <SelectValue placeholder="Select voice" />
                         </SelectTrigger>
                         <SelectContent>
@@ -686,9 +701,9 @@ export default function TTSPage() {
                   </div>
 
                   {/* Audio Controls */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 p-4 sm:p-6 bg-gray-50 rounded-xl">
+                    <div className="space-y-2 sm:space-y-3">
+                      <label className="text-sm font-semibold text-gray-700">
                         Speed: {speed[0]}x
                       </label>
                       <Slider
@@ -701,8 +716,8 @@ export default function TTSPage() {
                       />
                     </div>
                     
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
+                    <div className="space-y-2 sm:space-y-3">
+                      <label className="text-sm font-semibold text-gray-700">
                         Pitch: {pitch[0]}x
                       </label>
                       <Slider
@@ -715,8 +730,8 @@ export default function TTSPage() {
                       />
                     </div>
                     
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
+                    <div className="space-y-2 sm:space-y-3">
+                      <label className="text-sm font-semibold text-gray-700">
                         Volume: {volume[0]}
                       </label>
                       <Slider
@@ -731,26 +746,27 @@ export default function TTSPage() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-4 justify-center">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                     <Button 
                       onClick={generateSpeech} 
                       disabled={loading || !text.trim()}
                       size="lg"
+                      className="w-full sm:w-auto px-6 sm:px-8 h-12 text-base font-semibold"
                     >
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      <Mic className="mr-2 h-4 w-4" />
+                      {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+                      <Mic className="mr-2 h-5 w-5" />
                       Generate Speech
                     </Button>
                     
                     {audioUrl && (
                       <>
-                        <Button variant="outline" onClick={playAudio} size="lg">
-                          {isPlaying ? <Square className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                        <Button variant="outline" onClick={playAudio} size="lg" className="w-full sm:w-auto px-4 sm:px-6 h-12">
+                          {isPlaying ? <Square className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
                           {isPlaying ? 'Stop' : 'Play'}
                         </Button>
                         
-                        <Button variant="outline" onClick={downloadAudio} size="lg">
-                          <Download className="mr-2 h-4 w-4" />
+                        <Button variant="outline" onClick={downloadAudio} size="lg" className="w-full sm:w-auto px-4 sm:px-6 h-12">
+                          <Download className="mr-2 h-5 w-5" />
                           Download
                         </Button>
                       </>
@@ -759,43 +775,89 @@ export default function TTSPage() {
 
                   {/* Audio Player */}
                   {audioUrl && (
-                    <div className="border rounded-lg p-4 bg-gray-50">
-                      <h3 className="font-medium mb-3">Generated Audio</h3>
-                      <audio 
-                        ref={audioRef}
-                        controls 
-                        className="w-full"
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
-                        onEnded={() => setIsPlaying(false)}
-                      >
-                        <source src={audioUrl} type="audio/wav" />
-                        Your browser does not support the audio element.
-                      </audio>
-                    </div>
+                    <Card className="border-green-200 bg-green-50/50">
+                      <CardContent className="pt-4 sm:pt-6">
+                        <div className="flex items-center mb-4">
+                          <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                          <h3 className="font-semibold text-green-800">Generated Audio</h3>
+                        </div>
+                        <audio 
+                          ref={audioRef}
+                          controls 
+                          className="w-full"
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
+                          onEnded={() => setIsPlaying(false)}
+                        >
+                          <source src={audioUrl} type="audio/wav" />
+                          Your browser does not support the audio element.
+                        </audio>
+                      </CardContent>
+                    </Card>
                   )}
                 </TabsContent>
               </Tabs>
 
               {/* Status Messages */}
               {error && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="border-red-200">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription className="text-sm">{error}</AlertDescription>
                 </Alert>
               )}
               
               {success && (
-                <Alert>
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>{success}</AlertDescription>
+                <Alert className="border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-sm text-green-800">{success}</AlertDescription>
                 </Alert>
               )}
+            </CardContent>
+          </Card>
 
-              {/* Info Note */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-medium text-yellow-800 mb-2">🚀 Gemini 2.5 Flash Preview</h3>
-                <div className="text-sm text-yellow-700 space-y-1">
+          {/* Promotional Content Below Main Interface */}
+          <div className="mt-12 space-y-8">
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="text-center border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                <CardContent className="pt-6 sm:pt-8">
+                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Zap className="h-6 w-6 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">Lightning Fast</h3>
+                  <p className="text-gray-600 text-sm">Generate high-quality speech in seconds with our optimized AI engine</p>
+                </CardContent>
+              </Card>
+              
+              <Card className="text-center border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+                <CardContent className="pt-6 sm:pt-8">
+                  <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Star className="h-6 w-6 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">Premium Voices</h3>
+                  <p className="text-gray-600 text-sm">Access to cutting-edge AI voices with natural emotional expression</p>
+                </CardContent>
+              </Card>
+              
+              <Card className="text-center border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+                <CardContent className="pt-6 sm:pt-8">
+                  <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="h-6 w-6 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">1000 Free Characters</h3>
+                  <p className="text-gray-600 text-sm">Start with 1000 characters completely free - no credit card required</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Info Note */}
+            <Card className="bg-yellow-50 border-yellow-200">
+              <CardContent className="pt-6">
+                <h3 className="font-semibold text-yellow-800 mb-3 flex items-center">
+                  <Sparkles className="h-5 w-5 mr-2" />
+                  🚀 Gemini 2.5 Flash Preview
+                </h3>
+                <div className="text-sm text-yellow-700 space-y-2">
                   <p><strong>AI Script Generation:</strong> Create engaging scripts for any purpose with advanced AI</p>
                   <p><strong>Latest AI Voices:</strong> Experience state-of-the-art voices including Puck, Charon, Kore, Fenrir, and Aoede</p>
                   <p><strong>Pricing Plans:</strong> Free (1,000 chars), Starter (₹199), Pro (₹499), Enterprise (₹1,999)</p>
@@ -813,36 +875,47 @@ export default function TTSPage() {
                     </Link>
                   )}
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Free Trial CTA for Non-Authenticated Users */}
-              {!isAuthenticated && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      🎉 Free Trial: AI Script Generator + Premium Voices!
+            {/* Free Trial CTA for Non-Authenticated Users */}
+            {!isAuthenticated && (
+              <Card className="border-0 shadow-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <CardContent className="text-center py-8 sm:py-12">
+                  <div className="max-w-2xl mx-auto">
+                    <h3 className="text-2xl sm:text-3xl font-bold mb-4">
+                      🎉 AI Script Generator + Premium Voices!
                     </h3>
-                    <p className="text-gray-600 mb-4">
+                    <p className="text-blue-100 mb-6 text-base sm:text-lg">
                       Sign up for unlimited access to AI script generation, premium voices, and download features!
+                      Perfect for content creators, marketers, and businesses.
                     </p>
-                    <div className="space-x-4">
+                    <div className="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
                       <Button
                         onClick={() => setShowAuthModal(true)}
-                        className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-medium"
+                        size="lg"
+                        className="bg-white text-blue-600 hover:bg-gray-100 w-full sm:w-auto px-6 sm:px-8 h-12 text-base font-semibold"
                       >
                         Sign Up for Premium Features →
                       </Button>
+                      <Link href="/pricing">
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          className="border-white text-white hover:bg-white hover:text-blue-600 w-full sm:w-auto px-6 sm:px-8 h-12 text-base font-semibold"
+                        >
+                          View Pricing
+                        </Button>
+                      </Link>
                     </div>
-                    <p className="text-sm text-gray-500 mt-4">
-                      Create professional scripts with AI and convert them to speech.<br/>
-                      Perfect for content creators, marketers, and businesses.<br/>
-                      Join thousands of users creating amazing content with Gemini AI.
+                    <p className="text-sm text-blue-200 mt-6">
+                      No credit card required • Start in under 30 seconds • Upgrade anytime
                     </p>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
 
